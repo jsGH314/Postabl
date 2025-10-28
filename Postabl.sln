@@ -1,0 +1,37 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.36414.22 d17.14
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Postabl", "Postabl\Postabl.csproj", "{ABC42F55-8004-4374-B3B9-B113D09FD600}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DAL", "DAL\DAL.csproj", "{1F2F7F6D-C793-4142-95BE-706CC0EE4FF1}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Models", "Models\Models.csproj", "{7261822C-DB90-4999-BC84-EB046AD40FA1}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{ABC42F55-8004-4374-B3B9-B113D09FD600}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{ABC42F55-8004-4374-B3B9-B113D09FD600}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{ABC42F55-8004-4374-B3B9-B113D09FD600}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{ABC42F55-8004-4374-B3B9-B113D09FD600}.Release|Any CPU.Build.0 = Release|Any CPU
+		{1F2F7F6D-C793-4142-95BE-706CC0EE4FF1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{1F2F7F6D-C793-4142-95BE-706CC0EE4FF1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{1F2F7F6D-C793-4142-95BE-706CC0EE4FF1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{1F2F7F6D-C793-4142-95BE-706CC0EE4FF1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7261822C-DB90-4999-BC84-EB046AD40FA1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7261822C-DB90-4999-BC84-EB046AD40FA1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7261822C-DB90-4999-BC84-EB046AD40FA1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7261822C-DB90-4999-BC84-EB046AD40FA1}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {026C102C-363B-43F6-AEF2-FE9CFB2A3F9D}
+	EndGlobalSection
+EndGlobal
