@@ -1,5 +1,7 @@
 using System.Diagnostics;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
+using Models;
 using Postabl.Models;
 
 namespace Postabl.Controllers
@@ -15,7 +17,13 @@ namespace Postabl.Controllers
 
         public IActionResult Index()
         {
-            return View();
+
+            IEnumerable<BlogPost> blogPosts = new List<BlogPost>
+            {
+                new BlogPost { Id = 1, Title = "First Post", Content = "This is the content of the first post.", Author = "Admin", PublishedDate = DateTime.Now },
+                new BlogPost { Id = 2, Title = "Second Post", Content = "This is the content of the second post.", Author = "Admin", PublishedDate = DateTime.Now }
+            };
+            return View(blogPosts);
         }
 
         public IActionResult Privacy()
