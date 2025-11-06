@@ -16,5 +16,6 @@ namespace Models
 
         [NotMapped]
         public string Role { get; set; }
+        public Profile Profile { get; set; }
     }
 }

@@ -1,12 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
+﻿using DAL;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
-using DAL;
 using Models;
+using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Security.Claims;
+using System.Threading.Tasks;
 
 namespace Postabl.Areas.User.Controllers
 {
@@ -47,7 +48,11 @@ namespace Postabl.Areas.User.Controllers
         // GET: User/BlogPost/Create
         public IActionResult Create()
         {
-            return View();
+            var blogPost = new BlogPost
+            {
+                PublishedDate = DateTime.Now
+            };
+            return View(blogPost);
         }
 
         // POST: User/BlogPost/Create
@@ -55,10 +60,22 @@ namespace Postabl.Areas.User.Controllers
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Create([Bind("Id,Title,Content,PublishedDate,Author,Likes,ProfileId")] BlogPost blogPost)
+        public async Task<IActionResult> Create([Bind("Id,ApplicationUserId,Title,Content,PublishedDate,Author,Likes,IsPublic")] BlogPost blogPost)
         {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var user = await _context.ApplicationUsers.FirstOrDefaultAsync(u => u.Id == userId);
+            //blogPost.Author = user!.Name;
+            //blogPost.ApplicationUserId = user.Id;
+            //blogPost.ApplicationUser = user;
+
             if (ModelState.IsValid)
             {
+                blogPost.IsPublic = true;
+                //blogPost.ApplicationUser = user!;
+                blogPost.ApplicationUserId = userId;
+                blogPost.PublishedDate = DateTime.Now;
+                blogPost.Author = user.Name;
+                blogPost.Likes = 0;
                 _context.Add(blogPost);
                 await _context.SaveChangesAsync();
                 return RedirectToAction(nameof(Index));

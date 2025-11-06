@@ -9,25 +9,43 @@
 <h4>Profile</h4>
 <hr />
 <div class="row">
-    <div class="col-md-4">
-        <form asp-action="Edit">
+    <div class="col-md-6">
+        <form asp-action="Edit" enctype="multipart/form-data" method="post">
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <input type="hidden" asp-for="Id" />
-            <div class="form-group">
+            <div class="form-group mb-3">
                 <label asp-for="Bio" class="control-label"></label>
                 <input asp-for="Bio" class="form-control" />
                 <span asp-validation-for="Bio" class="text-danger"></span>
             </div>
-            <div class="form-group">
+            <div class="form-group mb-3">
                 <label asp-for="DisplayName" class="control-label"></label>
                 <input asp-for="DisplayName" class="form-control" />
                 <span asp-validation-for="DisplayName" class="text-danger"></span>
             </div>
-            <div class="form-group">
-                <label asp-for="UserId" class="control-label"></label>
-                <input asp-for="UserId" class="form-control" />
-                <span asp-validation-for="UserId" class="text-danger"></span>
+
+            <div class="form-group mb-3">
+                <label class="control-label">Profile photo</label>
+                @if (!string.IsNullOrWhiteSpace(Model?.ProfileImageUrl))
+                {
+                    <div class="mb-2">
+                        <img src="@Model.ProfileImageUrl" alt="Profile image" style="width:96px;height:96px;object-fit:cover;border-radius:50%;" />
+                    </div>
+                }
+                <input type="file" name="ProfileImage" accept="image/*" class="form-control" />
             </div>
+
+            <div class="form-group mb-3">
+                <label class="control-label">Cover photo</label>
+                @if (!string.IsNullOrWhiteSpace(Model?.CoverImageUrl))
+                {
+                    <div class="mb-2">
+                        <img src="@Model.CoverImageUrl" alt="Cover image" style="width:200px;height:80px;object-fit:cover;border-radius:.25rem;" />
+                    </div>
+                }
+                <input type="file" name="CoverImage" accept="image/*" class="form-control" />
+            </div>
+
             <div class="form-group">
                 <input type="submit" value="Save" class="btn btn-primary" />
             </div>
@@ -36,9 +54,11 @@
 </div>
 
 <div>
-    <a asp-action="Index">Back to List</a>
+    <a asp-area="User" asp-controller="Profile" asp-action="Index">Back to Profile</a>
 </div>
 
 @section Scripts {
-    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    @{
+        await Html.RenderPartialAsync("_ValidationScriptsPartial");
+    }
 }

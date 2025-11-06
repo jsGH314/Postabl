@@ -12,7 +12,7 @@ namespace DAL
         {
         }
 
-        public DbSet<ApplicationUser> Users { get; set; }
+        public DbSet<ApplicationUser> ApplicationUsers { get; set; }
         public DbSet<Profile> Profiles { get; set; }
         public DbSet<BlogPost> BlogPosts { get; set; }
         //public DbSet<Follower> Followers { get; set; }

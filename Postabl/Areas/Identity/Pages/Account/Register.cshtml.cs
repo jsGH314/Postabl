@@ -116,10 +116,13 @@ namespace Postabl.Areas.Identity.Pages.Account
             [System.ComponentModel.DataAnnotations.Required]
             public string Name { get; set; }
             public string? PhoneNumber { get; set; }
+            public string? Bio { get; set; }
+            public string? ProfileImageUrl { get; set; }
+            public string? DisplayName { get; set; }
+            public DateTime? DateOfBirth { get; set; }
+
         }
-
-
-        public async Task OnGetAsync(string returnUrl = null)
+            public async Task OnGetAsync(string returnUrl = null)
         {
             if (!_roleManager.RoleExistsAsync(SD.Role_User).GetAwaiter().GetResult())
             {
@@ -154,6 +157,17 @@ namespace Postabl.Areas.Identity.Pages.Account
                 await _emailStore.SetEmailAsync(user, Input.Email, CancellationToken.None);
                 user.Name = Input.Name;
                 //user.PhoneNumber = Input.PhoneNumber;
+                //When user is registered, create a new profile for them
+                var profile = new Profile
+                {
+                    Bio = Input.Bio,
+                    DisplayName = Input.DisplayName,
+                    DateOfBirth = Input.DateOfBirth,
+                    ProfileImageUrl = Input.ProfileImageUrl,
+                    ApplicationUser = user
+                };
+                //Assign profile to user
+                user.Profile = profile;
                 var result = await _userManager.CreateAsync(user, Input.Password);
 
                 if (result.Succeeded)
