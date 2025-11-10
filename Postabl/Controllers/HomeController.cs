@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Models;
+using Models.ViewModels;
 using Postabl.Models;
 using SQLitePCL;
 using System.Diagnostics;
@@ -23,21 +24,56 @@ namespace Postabl.Controllers
             _context = context;
         }
 
-        public IActionResult Index()
+        public IActionResult Index(int page = 1, int pageSize = 12)
         {
+            var query = _context.BlogPosts
+                        .Where(b => b.IsPublic)
+                        .OrderByDescending(b => b.PublishedDate);
 
-            IEnumerable<BlogPost> blogPosts = new List<BlogPost>
+            var posts = query
+                .Skip((page - 1) * pageSize)
+                .Take(pageSize)
+                .ToList(); // use ToListAsync() if you add async EF Core call
+
+            var userIds = posts.Select(p => p.ApplicationUserId).Where(id => id != null).Distinct().ToList();
+            var profiles = _context.Profiles
+                .Where(p => userIds.Contains(p.ApplicationUserId))
+                .ToDictionary(p => p.ApplicationUserId, p => p);
+
+
+            var postCards = posts.Select(p => new PostCardVM
             {
-                new BlogPost { Id = 1, Title = "First Post", Content = "This is the public content of the first post.", Author = "Admin", PublishedDate = DateTime.Now, IsPublic = true },
-                new BlogPost { Id = 2, Title = "Second Post", Content = "This is the public content of the second post.", Author = "Admin", PublishedDate = DateTime.Now, IsPublic = true }
+                Post = p,
+                ProfileImageUrl = profiles.TryGetValue(p.ApplicationUserId, out var prof) && !string.IsNullOrWhiteSpace(prof.ProfileImageUrl)
+                    ? prof.ProfileImageUrl
+                    : "/images/placeholder-profile.png",
+                Profile = profiles.TryGetValue(p.ApplicationUserId, out var profile) ? profile : new Profile()
+            }).ToList();
+
+            var PublicFeedVM = new PublicFeedVM
+            {
+                Posts = postCards,
+                TotalPosts = query.Count(),
+                Page = page,
+                PageSize = pageSize,
+                IsAuthenticated = User?.Identity?.IsAuthenticated ?? false
             };
-            return View(blogPosts);
+
+            return View(PublicFeedVM);
         }
 
-        public IActionResult Profile()
+        public async Task<IActionResult> Profile()
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            return View(_context.Profiles.FirstOrDefault(x => x.ApplicationUserId == userId));
+
+            UserProfileVM profileVM = new UserProfileVM()
+            {
+                User = await _context.ApplicationUsers.FirstOrDefaultAsync(u => u.Id == userId),
+                Profile = await _context.Profiles.FirstOrDefaultAsync(p => p.ApplicationUserId == userId),
+                BlogPostList = await _context.BlogPosts.Where(b => b.ApplicationUserId == userId).ToListAsync()
+            };
+
+            return View(profileVM);
         }
 
         public IActionResult Privacy()

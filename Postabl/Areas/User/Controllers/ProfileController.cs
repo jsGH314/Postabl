@@ -94,6 +94,59 @@ namespace Postabl.Areas.User.Controllers
             return View(profileVM);
         }
 
+
+        // Added this section to allow viewing another user's public profile by user id (public view)
+        [AllowAnonymous]
+        [HttpGet]
+        public async Task<IActionResult> ViewProfile(string id)
+        {
+            if (string.IsNullOrWhiteSpace(id)) return NotFound();
+
+            var user = await _context.ApplicationUsers.FirstOrDefaultAsync(u => u.Id == id);
+            var profile = await _context.Profiles.FirstOrDefaultAsync(p => p.ApplicationUserId == id);
+            var posts = await _context.BlogPosts
+                .Where(b => b.ApplicationUserId == id && b.IsPublic)
+                .OrderByDescending(b => b.PublishedDate)
+                .ToListAsync();
+
+            var profileVM = new UserProfileVM
+            {
+                User = user ?? new ApplicationUser(),
+                Profile = profile ?? new Profile(),
+                BlogPostList = posts
+            };
+
+            // Reuse the existing Profile view
+            return View("Profile", profileVM);
+        }
+
+        [AllowAnonymous]
+        [HttpGet] // friendly absolute route, e.g. /u/123
+        public async Task<IActionResult> ViewPublicProfile(int id)
+        {
+            // load profile including the related ApplicationUser (if present)
+            var profile = await _context.Profiles
+                .Include(p => p.ApplicationUser)
+                .FirstOrDefaultAsync(p => p.Id == id);
+
+            if (profile == null) return NotFound();
+
+            var userId = profile.ApplicationUserId;
+            var posts = await _context.BlogPosts
+                .Where(b => b.ApplicationUserId == userId && b.IsPublic)
+                .OrderByDescending(b => b.PublishedDate)
+                .ToListAsync();
+
+            var profileVm = new UserProfileVM
+            {
+                User = profile.ApplicationUser ?? new ApplicationUser(),
+                Profile = profile,
+                BlogPostList = posts
+            };
+
+            return View("ViewPublicProfile", profileVm);
+        }
+
         // GET: User/Profile/Details/5
         //public async Task<IActionResult> Details(int? id)
         //{

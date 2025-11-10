@@ -3,11 +3,13 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
 using Models;
+using Models.ViewModels;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using System.Net;
 
 namespace Postabl.Areas.User.Controllers
 {
@@ -25,6 +27,41 @@ namespace Postabl.Areas.User.Controllers
         public async Task<IActionResult> Index()
         {
             return View(await _context.BlogPosts.ToListAsync());
+        }
+
+        public async Task<IActionResult> ViewPost(int? id)
+        {
+            if (id == null)
+            {
+                return NotFound();
+            }
+
+            // Include ApplicationUser -> Profile so we can map profile id and image safely
+            var blogPost = await _context.BlogPosts
+                .Include(b => b.ApplicationUser)
+                    .ThenInclude(u => u.Profile)
+                .FirstOrDefaultAsync(m => m.Id == id);
+
+            if (blogPost == null)
+            {
+                return NotFound();
+            }
+
+            // Map to a view model for reading a post
+            var postVM = new PostDetailsVM
+            {
+                Id = blogPost.Id,
+                Title = blogPost.Title,
+                Content = blogPost.Content,
+                Author = blogPost.Author,
+                PublishedDate = blogPost.PublishedDate,
+                Likes = blogPost.Likes,
+                IsPublic = blogPost.IsPublic,
+                ProfileId = blogPost.ApplicationUser?.Profile?.Id,
+                ProfileImageUrl = blogPost.ApplicationUser?.Profile?.ProfileImageUrl
+            };
+
+            return View(postVM);
         }
 
         // GET: User/BlogPost/Details/5
@@ -70,7 +107,7 @@ namespace Postabl.Areas.User.Controllers
 
             if (ModelState.IsValid)
             {
-                blogPost.IsPublic = true;
+                //blogPost.IsPublic = true;
                 //blogPost.ApplicationUser = user!;
                 blogPost.ApplicationUserId = userId;
                 blogPost.PublishedDate = DateTime.Now;
@@ -165,6 +202,46 @@ namespace Postabl.Areas.User.Controllers
 
             await _context.SaveChangesAsync();
             return RedirectToAction(nameof(Index));
+        }
+
+        // POST: User/BlogPost/Like
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> Like(int id)
+        {
+            // If user is not authenticated, redirect to Identity login with returnUrl back to the referring page
+            if (!(User?.Identity?.IsAuthenticated ?? false))
+            {
+                var returnUrl = Request.Headers["Referer"].ToString();
+                if (string.IsNullOrEmpty(returnUrl))
+                {
+                    // Fallback to the post details page
+                    returnUrl = Url.Action(nameof(ViewPost), "BlogPost", new { area = "User", id });
+                }
+
+                var loginUrl = $"/Identity/Account/Login?returnUrl={WebUtility.UrlEncode(returnUrl)}";
+                return Redirect(loginUrl);
+            }
+
+            var blogPost = await _context.BlogPosts.FindAsync(id);
+            if (blogPost == null)
+            {
+                return NotFound();
+            }
+
+            // Simple increment; you can add further checks (one-like-per-user) if desired
+            blogPost.Likes += 1;
+            _context.Update(blogPost);
+            await _context.SaveChangesAsync();
+
+            // Return to the referring page when possible (feed or post view)
+            var referer = Request.Headers["Referer"].ToString();
+            if (!string.IsNullOrEmpty(referer))
+            {
+                return Redirect(referer);
+            }
+
+            return RedirectToAction(nameof(ViewPost), new { id });
         }
 
         private bool BlogPostExists(int id)

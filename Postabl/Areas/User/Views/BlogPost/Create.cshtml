@@ -22,6 +22,16 @@
                 <input asp-for="Content" class="form-control" />
                 <span asp-validation-for="Content" class="text-danger"></span>
             </div>
+            <div class="form-group mt-3">
+                <div class="form-check form-switch">
+                    <input class="form-check-input" asp-for="IsPublic" type="checkbox" role="switch" id="IsPublic" />
+                    <label class="form-check-label" for="IsPublic">
+                        @* When checked the post will be public; unchecked makes it private *@
+                        Public
+                    </label>
+                </div>
+                <span class="form-text text-muted">Toggle to control who can see this post.</span>
+            </div>
 @*             <div class="form-group">
                 <label asp-for="PublishedDate" class="control-label"></label>
                 <input asp-for="PublishedDate" class="form-control" />

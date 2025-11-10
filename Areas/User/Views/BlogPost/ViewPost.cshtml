@@ -1,0 +1,114 @@
+@model Models.ViewModels.PostDetailsVM
+
+@{
+    ViewData["Title"] = "Post";
+}
+
+<style>
+    .post-container {
+        max-width: 900px;
+        margin: 2rem auto;
+        padding: 0 1rem;
+    }
+
+    .post-card {
+        display: grid;
+        grid-template-columns: 72px 1fr;
+        gap: 1rem;
+        align-items: start;
+        padding: 1.25rem;
+        border-radius: .5rem;
+        box-shadow: 0 6px 18px rgba(0,0,0,.06);
+        background: #fff;
+    }
+
+    .post-avatar {
+        width: 72px;
+        height: 72px;
+        border-radius: 50%;
+        object-fit: cover;
+        flex-shrink: 0;
+    }
+
+    .post-meta {
+        display: flex;
+        justify-content: space-between;
+        gap: 1rem;
+        align-items: start;
+    }
+
+    .post-title {
+        margin: 0 0 .25rem 0;
+        word-break: break-word;
+    }
+
+    .post-content {
+        white-space: pre-wrap;
+        line-height: 1.6;
+        margin-top: .75rem;
+    }
+
+    .post-actions {
+        display: flex;
+        gap: .5rem;
+        align-items: center;
+        margin-top: 1rem;
+    }
+
+    @media (max-width: 576px) {
+        .post-card {
+            grid-template-columns: 56px 1fr;
+            padding: 1rem;
+        }
+
+        .post-avatar {
+            width: 56px;
+            height: 56px;
+        }
+    }
+</style>
+
+<div class="post-container">
+    <article class="post-card" aria-labelledby="post-title-@Model?.Id">
+        <a asp-area="User" asp-controller="Profile" asp-action="ViewPublicProfile" asp-route-id="@Model?.ProfileId" class="d-block" title="View author profile">
+            <img src="@(string.IsNullOrWhiteSpace(Model?.ProfileImageUrl) ? Url.Content("~/images/placeholder-profile.png") : Model?.ProfileImageUrl)"
+                 alt="Avatar of @Model?.Author"
+                 class="post-avatar" />
+        </a>
+
+        <div>
+            <div class="post-meta">
+                <div>
+                    <h1 id="post-title-@Model?.Id" class="post-title h4">@Model?.Title</h1>
+                    <div class="text-muted">
+                        <small>@Model?.Author • @Model?.PublishedDate.ToString("MMM d, yyyy")</small>
+                    </div>
+                </div>
+
+                <div class="text-end">
+                    <small class="text-muted">@((Model?.IsPublic ?? false) ? "Public" : "Followers only")</small>
+                </div>
+            </div>
+
+            <div class="post-content">
+                @Html.Raw(Html.Encode(Model?.Content ?? string.Empty).Replace("\n", "<br />"))
+            </div>
+
+            <div class="post-actions">
+                <form asp-area="User" asp-controller="BlogPost" asp-action="Like" method="post" class="d-inline">
+                    <input type="hidden" name="id" value="@Model?.Id" />
+                    <button type="submit" class="btn btn-sm btn-outline-secondary" title="Like" aria-label="Like post">
+                        <span class="me-1">??</span> @Model?.Likes
+                    </button>
+                </form>
+
+                <a asp-area="User" asp-controller="BlogPost" asp-action="Index" class="btn btn-sm btn-light">Back to posts</a>
+            </div>
+        </div>
+    </article>
+
+    @* <div>
+        <a asp-action="Edit" asp-route-id="@Model?.Id">Edit</a> |
+        <a asp-action="Index">Back to List</a>
+    </div> *@
+</div>
