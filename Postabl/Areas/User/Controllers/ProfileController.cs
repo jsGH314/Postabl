@@ -88,7 +88,11 @@ namespace Postabl.Areas.User.Controllers
             {
                 User = await _context.ApplicationUsers.FirstOrDefaultAsync(u => u.Id == userId),
                 Profile = await _context.Profiles.FirstOrDefaultAsync(p => p.ApplicationUserId == userId),
-                BlogPostList = await _context.BlogPosts.Where(b => b.ApplicationUserId == userId).ToListAsync()
+                //BlogPostList = await _context.BlogPosts.Where(b => b.ApplicationUserId == userId).ToListAsync()
+                BlogPostList = await _context.BlogPosts
+                    .Where(b => b.ApplicationUserId == userId)
+                    .OrderByDescending(b => b.PublishedDate)
+                    .ToListAsync()
             };
 
             return View(profileVM);
@@ -147,6 +151,8 @@ namespace Postabl.Areas.User.Controllers
             return View("ViewPublicProfile", profileVm);
         }
 
+
+
         // GET: User/Profile/Details/5
         //public async Task<IActionResult> Details(int? id)
         //{
@@ -204,74 +210,58 @@ namespace Postabl.Areas.User.Controllers
         }
 
         // POST: User/Profile/Edit/5
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Bio,DisplayName")] Profile profile, IFormFile ProfileImage, IFormFile CoverImage)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Bio,DisplayName")] Profile profile /*IFormFile ProfileImage, IFormFile CoverImage*/)
         {
             if (id != profile.Id)
             {
                 return NotFound();
             }
 
-            // get existing to preserve URLs if no new files are uploaded
-            var existing = await _context.Profiles.AsNoTracking().FirstOrDefaultAsync(p => p.Id == id);
+            if (!ModelState.IsValid)
+            {
+                return View(profile);
+            }
+
+            // Load existing entity to preserve FK and any other fields not in the bind list
+            var existing = await _context.Profiles.FirstOrDefaultAsync(p => p.Id == id);
             if (existing == null) return NotFound();
 
-            // ensure the model has existing image urls as a baseline
-            profile.ProfileImageUrl = existing.ProfileImageUrl;
-            profile.CoverImageUrl = existing.CoverImageUrl;
+            // Only update allowed fields from the incoming model
+            existing.Bio = profile.Bio;
+            existing.DisplayName = profile.DisplayName;
 
-            // preserve existing FK
-            profile.ApplicationUserId = existing.ApplicationUserId;
-
-            // handle profile image upload
-            if (ProfileImage != null && ProfileImage.Length > 0)
+            try
             {
-                var uploads = Path.Combine(_env.WebRootPath, "uploads", "profiles");
-                Directory.CreateDirectory(uploads);
-                var ext = Path.GetExtension(ProfileImage.FileName);
-                var fileName = $"{Guid.NewGuid()}{ext}";
-                var filePath = Path.Combine(uploads, fileName);
+                _context.Profiles.Update(existing);
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!_context.Profiles.Any(e => e.Id == id)) return NotFound();
+                throw;
+            }
+
+            // Redirect to profile view (or Index) to avoid re-post issues
+            return RedirectToAction(nameof(Profile));
+        }
+
+        public string ImageUpload(IFormFile image)
+        {
+            if (image != null && image.Length > 0)
+            {
+                // Handle file upload logic here
+                var filePath = Path.Combine(_env.WebRootPath, "uploads", "profiles", image.FileName);
 
                 using (var stream = new FileStream(filePath, FileMode.Create))
                 {
-                    await ProfileImage.CopyToAsync(stream);
+                    image.CopyToAsync(stream);
                 }
-                profile.ProfileImageUrl = $"/uploads/profiles/{fileName}";
+                //returns the relative path to be saved in the database
+                return $"/uploads/profiles/{image.FileName}";
             }
-
-            // handle cover image upload
-            if(CoverImage != null && CoverImage.Length > 0)
-            {
-                var uploads = Path.Combine(_env.WebRootPath, "uploads", "profiles");
-                Directory.CreateDirectory(uploads);
-                var ext = Path.GetExtension(CoverImage.FileName);
-                var fileName = $"{Guid.NewGuid()}{ext}";
-                var filePath = Path.Combine(uploads, fileName);
-                using (var stream = new FileStream(filePath, FileMode.Create))
-                {
-                    await CoverImage.CopyToAsync(stream);
-                }
-                profile.CoverImageUrl = $"/uploads/profiles/{fileName}";
-            }
-
-            if(ModelState.IsValid)
-            {
-                try
-                {
-                    _context.Update(profile);
-                    await _context.SaveChangesAsync();
-                    return RedirectToAction(nameof(Profile));
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!_context.Profiles.Any(e => e.Id == profile.Id)) return NotFound();
-                    throw;
-                }
-            }
-            return View(profile);
+            return null;
         }
 
         // GET: User/Profile/Delete/5
@@ -311,5 +301,64 @@ namespace Postabl.Areas.User.Controllers
         //    {
         //        return _context.Profiles.Any(e => e.Id == id);
         //    }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UploadProfileImage(int id, IFormFile file)
+        {
+            if (file == null || file.Length == 0) return BadRequest(new { success = false, error = "No file uploaded" });
+
+            var profile = await _context.Profiles.FirstOrDefaultAsync(p => p.Id == id);
+            if (profile == null) return NotFound(new { success = false, error = "Profile not found" });
+
+            var uploads = System.IO.Path.Combine(_env.WebRootPath, "uploads", "profiles");
+            System.IO.Directory.CreateDirectory(uploads);
+
+            var ext = System.IO.Path.GetExtension(file.FileName);
+            var fileName = $"{Guid.NewGuid()}{ext}";
+            var filePath = System.IO.Path.Combine(uploads, fileName);
+
+            using (var stream = new System.IO.FileStream(filePath, System.IO.FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            // update DB with cache-busting query so browser fetches new image
+            profile.ProfileImageUrl = $"/uploads/profiles/{fileName}?v={DateTime.UtcNow.Ticks}";
+
+            _context.Profiles.Update(profile);
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true, url = profile.ProfileImageUrl });
+        }
+
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> UploadCoverImage(int id, IFormFile file)
+        {
+            if (file == null || file.Length == 0) return BadRequest(new { success = false, error = "No file uploaded" });
+
+            var profile = await _context.Profiles.FirstOrDefaultAsync(p => p.Id == id);
+            if (profile == null) return NotFound(new { success = false, error = "Profile not found" });
+
+            var uploads = System.IO.Path.Combine(_env.WebRootPath, "uploads", "profiles");
+            System.IO.Directory.CreateDirectory(uploads);
+
+            var ext = System.IO.Path.GetExtension(file.FileName);
+            var fileName = $"{Guid.NewGuid()}{ext}";
+            var filePath = System.IO.Path.Combine(uploads, fileName);
+
+            using (var stream = new System.IO.FileStream(filePath, System.IO.FileMode.Create))
+            {
+                await file.CopyToAsync(stream);
+            }
+
+            profile.CoverImageUrl = $"/uploads/profiles/{fileName}?v={DateTime.UtcNow.Ticks}";
+
+            _context.Profiles.Update(profile);
+            await _context.SaveChangesAsync();
+
+            return Json(new { success = true, url = profile.CoverImageUrl });
+        }
     }
 }

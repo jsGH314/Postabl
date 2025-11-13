@@ -244,6 +244,32 @@ namespace Postabl.Areas.User.Controllers
             return RedirectToAction(nameof(ViewPost), new { id });
         }
 
+        // POST: User/BlogPost/QuickPost
+        [HttpPost]
+        [ValidateAntiForgeryToken]
+        public async Task<IActionResult> QuickPost(string content)
+        {
+            if (string.IsNullOrWhiteSpace(content))
+            {
+                return BadRequest("Content cannot be empty.");
+            }
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var user = await _context.ApplicationUsers.FirstOrDefaultAsync(u => u.Id == userId);
+            var blogPost = new BlogPost
+            {
+                ApplicationUserId = userId,
+                Author = user.Name,
+                Content = content,
+                Title = "Quick Post",
+                PublishedDate = DateTime.Now,
+                Likes = 0,
+                IsPublic = true
+            };
+            _context.Add(blogPost);
+            await _context.SaveChangesAsync();
+            return RedirectToAction("Profile", "Profile");
+        }
+
         private bool BlogPostExists(int id)
         {
             return _context.BlogPosts.Any(e => e.Id == id);

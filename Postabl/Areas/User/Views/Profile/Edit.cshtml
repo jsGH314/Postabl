@@ -1,4 +1,4 @@
-﻿@model Models.Profile
+﻿@* @model Models.Profile
 
 @{
     ViewData["Title"] = "Edit";
@@ -11,6 +11,7 @@
 <div class="row">
     <div class="col-md-6">
         <form asp-action="Edit" enctype="multipart/form-data" method="post">
+            @Html.AntiForgeryToken()
             <div asp-validation-summary="ModelOnly" class="text-danger"></div>
             <input type="hidden" asp-for="Id" />
             <div class="form-group mb-3">
@@ -61,4 +62,170 @@
     @{
         await Html.RenderPartialAsync("_ValidationScriptsPartial");
     }
+} *@
+
+@model Models.Profile
+
+@{
+    ViewData["Title"] = "Profile";
+    string photoUrl = string.IsNullOrWhiteSpace(Model?.ProfileImageUrl) ? "/images/placeholder-profile.png" : Model.ProfileImageUrl;
+    string coverUrl = string.IsNullOrWhiteSpace(Model?.CoverImageUrl) ? "/images/placeholder-cover.jpg" : Model.CoverImageUrl;
+}
+
+
+<!-- Anti-forgery token (read by JS) -->
+<form id="afForm" style="display:none">@Html.AntiForgeryToken()</form>
+
+<!-- Page header / cover with overlay upload -->
+<div id="coverDiv" class="profile-cover mb-3 cover-wrapper" style="background-image: url('@coverUrl'); background-size: cover; background-position: center; height:180px;">
+    <div class="cover-overlay">
+        <button id="coverUploadBtn" type="button" class="overlay-btn btn btn-sm">Change cover</button>
+    </div>
+    <input id="coverInput" type="file" accept="image/*" style="display:none" />
+</div>
+
+<div class="container">
+    <div class="row">
+        <!-- MOBILE: collapsible profile info -->
+        <div class="col-12 d-md-none mb-3">
+            <div class="d-flex align-items-center">
+                <img src="@photoUrl" alt="Profile photo" class="rounded-circle me-3" style="width:72px;height:72px;object-fit:cover;">
+                <div>
+                    <h4 class="mb-0">@Html.DisplayFor(m => m.DisplayName)</h4>
+                    <small class="text-muted">@Html.DisplayFor(m => m.Bio)</small>
+                </div>
+            </div>
+
+            <button class="btn btn-outline-secondary w-100 mt-3" type="button" data-bs-toggle="collapse" data-bs-target="#profileCollapse" aria-expanded="false" aria-controls="profileCollapse">
+                View profile details
+            </button>
+
+            <div class="collapse mt-3" id="profileCollapse">
+                <div class="card">
+                    <div class="card-body">
+                        <p class="mb-2">@Html.DisplayFor(m => m.Bio)</p>
+                        <div class="d-flex gap-2">
+                            <a asp-action="Edit" asp-route-id="@Model?.Id" class="btn btn-primary btn-sm">Edit Profile</a>
+                            @* <a asp-action="Index">Back to List</a> *@
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DESKTOP: left pane profile -->
+        <aside class="col-md-4 d-none d-md-block">
+            <div class="card sticky-top" style="top:1rem;">
+                <div class="card-body text-center">
+                    <div class="image-wrapper">
+                        <img id="profilePhoto" src="@photoUrl" alt="Profile photo" class="rounded-circle mb-3" style="width:140px;height:140px;object-fit:cover;">
+                        <div class="image-overlay">
+                            <button id="profileUploadBtn" type="button" class="overlay-btn btn btn-sm">Change</button>
+                        </div>
+                        <input id="profileInput" type="file" accept="image/*" style="display:none" />
+                    </div>
+
+                    <h4 class="card-title mb-1">@Html.DisplayFor(m => m.DisplayName)</h4>
+                    <p class="text-muted mb-2">@Html.DisplayFor(m => m.Bio)</p>
+
+                    <div class="d-grid">
+                        <a asp-area="User" asp-controller="Profile" asp-action="Edit" asp-route-id="@Model?.Id" class="btn btn-primary">Edit Profile</a>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Right pane: settings -->
+        <main class="col-12 col-md-8">
+            <form asp-area="User" asp-controller="Profile" asp-action="Edit" method="post" enctype="multipart/form-data">
+                @Html.AntiForgeryToken()
+                <input type="hidden" asp-for="Id" />
+                <div class="d-flex align-items-center justify-content-between mb-3">
+                    <h3 class="mb-0">Profile Settings</h3>
+                    <button type="submit" class="btn btn-sm btn-primary">Save Changes</button>
+                </div>
+
+                <div class="row g-3">
+                    <!-- Profile settings list, edit bio, display name, default privacy etc. -->
+                    <div class="col-12 col-lg-8">
+                        <div class="mb-3">
+                            <label asp-for="DisplayName" class="form-label">Display name</label>
+                            <input asp-for="DisplayName" class="form-control" />
+                            <span asp-validation-for="DisplayName" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label asp-for="Bio" class="form-label">Bio</label>
+                            <textarea asp-for="Bio" class="form-control" rows="4" maxlength="200"></textarea>
+                            <div class="form-text text-muted">Up to 200 characters</div>
+                            <span asp-validation-for="Bio" class="text-danger"></span>
+                        </div>
+
+                        @* Add other settings here (privacy, links, etc.) *@
+                    </div>
+                </div>
+            </form>
+        </main>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const profileId = '@Model?.Id';
+            if (!profileId) return;
+
+            const afTokenInput = document.querySelector('#afForm input[name="__RequestVerificationToken"]');
+            const token = afTokenInput ? afTokenInput.value : null;
+
+            function sendFile(url, file, successCb, errorCb) {
+                const fd = new FormData();
+                fd.append('file', file);
+                if (token) fd.append('__RequestVerificationToken', token);
+
+                fetch(url, {
+                    method: 'POST',
+                    body: fd
+                })
+                .then(r => r.json())
+                .then(json => {
+                    if (json && json.success) successCb(json.url);
+                    else errorCb(json && json.error ? json.error : 'Upload failed');
+                })
+                .catch(err => errorCb(err && err.message ? err.message : 'Network error'));
+            }
+
+            // Profile photo handlers
+            const profileBtn = document.getElementById('profileUploadBtn');
+            const profileInput = document.getElementById('profileInput');
+            const profileImg = document.getElementById('profilePhoto');
+            if (profileBtn && profileInput && profileImg) {
+                profileBtn.addEventListener('click', () => profileInput.click());
+                profileInput.addEventListener('change', () => {
+                    const file = profileInput.files[0];
+                    if (!file) return;
+                    const url = '@Url.Action("UploadProfileImage", "Profile", new { area = "User" })' + '?id=' + profileId;
+                    sendFile(url, file, (newUrl) => {
+                        profileImg.src = newUrl;
+                    }, (err) => alert('Upload error: ' + err));
+                });
+            }
+
+            // Cover photo handlers
+            const coverBtn = document.getElementById('coverUploadBtn');
+            const coverInput = document.getElementById('coverInput');
+            const coverDiv = document.getElementById('coverDiv');
+            if (coverBtn && coverInput && coverDiv) {
+                coverBtn.addEventListener('click', () => coverInput.click());
+                coverInput.addEventListener('change', () => {
+                    const file = coverInput.files[0];
+                    if (!file) return;
+                    const url = '@Url.Action("UploadCoverImage", "Profile", new { area = "User" })' + '?id=' + profileId;
+                    sendFile(url, file, (newUrl) => {
+                        coverDiv.style.backgroundImage = 'url(' + newUrl + ')';
+                    }, (err) => alert('Upload error: ' + err));
+                });
+            }
+        })();
+    </script>
 }

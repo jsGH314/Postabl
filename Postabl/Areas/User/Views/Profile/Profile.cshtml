@@ -6,8 +6,18 @@
     string coverUrl = string.IsNullOrWhiteSpace(Model?.Profile?.CoverImageUrl) ? "/images/placeholder-cover.jpg" : Model.Profile.CoverImageUrl;
 }
 
-<!-- Page header / cover -->
-<div class="profile-cover mb-3" style="background-image: url('@coverUrl'); background-size: cover; background-position: center; height:180px; border-radius:.25rem;"></div>
+
+<!-- Anti-forgery token (read by JS) -->
+<form id="afForm" style="display:none">@Html.AntiForgeryToken()</form>
+
+<!-- Page header / cover with overlay upload -->
+<div id="coverDiv" class="profile-cover mb-3 cover-wrapper" style="background-image: url('@coverUrl'); background-size: cover; background-position: center; height:180px;">
+    <div class="cover-overlay">
+        <button id="coverUploadBtn" type="button" class="overlay-btn btn btn-sm">Change cover</button>
+    </div>
+    <input id="coverInput" type="file" accept="image/*" style="display:none" />
+</div>
+
 <div class="container">
     <div class="row">
         <!-- MOBILE: collapsible profile info -->
@@ -41,28 +51,19 @@
         <aside class="col-md-4 d-none d-md-block">
             <div class="card sticky-top" style="top:1rem;">
                 <div class="card-body text-center">
-                    <img src="@photoUrl" alt="Profile photo" class="rounded-circle mb-3" style="width:140px;height:140px;object-fit:cover;">
+                    <div class="image-wrapper">
+                        <img id="profilePhoto" src="@photoUrl" alt="Profile photo" class="rounded-circle mb-3" style="width:140px;height:140px;object-fit:cover;">
+                        <div class="image-overlay">
+                            <button id="profileUploadBtn" type="button" class="overlay-btn btn btn-sm">Change</button>
+                        </div>
+                        <input id="profileInput" type="file" accept="image/*" style="display:none" />
+                    </div>
+
                     <h4 class="card-title mb-1">@Html.DisplayFor(m => m.Profile.DisplayName)</h4>
                     <p class="text-muted mb-2">@Html.DisplayFor(m => m.Profile.Bio)</p>
 
-                    <div class="d-flex justify-content-center gap-3 mb-3">
-                        <div class="text-center">
-                            <div class="h5 mb-0">@Model?.BlogPostList?.Count()</div>
-                            <small class="text-muted">Posts</small>
-                        </div>
-                        @*                         <div class="text-center">
-                            <div class="h5 mb-0">@Model?.Profile?.FollowersCount ?? 0</div>
-                            <small class="text-muted">Followers</small>
-                        </div> *@
-                    </div>
-
                     <div class="d-grid">
                         <a asp-area="User" asp-controller="Profile" asp-action="Edit" asp-route-id="@Model?.Profile?.Id" class="btn btn-primary">Edit Profile</a>
-                    </div>
-
-                    @* Preserve original Back link (commented out) *@
-                    <div class="mt-2">
-                        @* <a asp-action="Index">Back to List</a> *@
                     </div>
                 </div>
             </div>
@@ -72,13 +73,13 @@
         <main class="col-12 col-md-8">
             <div class="d-flex align-items-center justify-content-between mb-3">
                 <h3 class="mb-0">Posts</h3>
-                <small class="text-muted">@Model?.BlogPostList?.Count() posts</small>
-                @* <a asp-area="User" asp-controller="BlogPost" asp-action="Create" class="btn btn-sm btn-primary">New Post</a> *@
+                @* <small class="text-muted">@Model?.BlogPostList?.Count() posts</small> *@
+                <a asp-area="User" asp-controller="BlogPost" asp-action="Create" class="btn btn-sm btn-primary">New Post</a>
             </div>
 
 
             <!-- TODO Quick post form -->
-@*             <div class="card mb-3">
+            <div class="card mb-3">
                 <div class="card-body">
                     <form asp-area="User" asp-controller="BlogPost" asp-action="QuickPost" method="post" class="row g-2">
                         @Html.AntiForgeryToken()
@@ -90,15 +91,16 @@
                         </div>
                     </form>
                 </div>
-            </div> *@
+            </div> 
 
-            @if (Model.BlogPostList != null && Model.BlogPostList.Any())
-            {
+
 
                 <div class="row g-3">
-                    <div class="d-grid">
+@*                     <div class="d-grid">
                         <a asp-area="User" asp-controller="BlogPost" asp-action="Create" class="btn btn-sm btn-primary">New Post</a>
-                    </div>
+                    </div> *@
+                @if (Model.BlogPostList != null && Model.BlogPostList.Any())
+                {
                     @foreach (var post in Model.BlogPostList)
                     {
                         <div class="col-12 col-sm-6">
@@ -110,20 +112,85 @@
                                     </div>
                                     <p class="card-text flex-grow-1">@((post.Content?.Length > 200) ? post.Content.Substring(0, 200) + "…" : post.Content)</p>
                                     <div class="d-flex justify-content-between align-items-center mt-3">
-                                        @* <small class="text-muted">Likes: @post.Likes</small> *@
-                                        <button type="submit" class="btn btn-sm btn-outline-secondary" title="Like">❤️ @post.Likes</button>
+                                        <form asp-area="User" asp-controller="BlogPost" asp-action="Like" method="post" class="d-inline">
+                                            @Html.AntiForgeryToken()
+                                            <input type="hidden" name="id" value="@post.Id" />
+                                            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Like">❤️ @post.Likes</button>
+                                        </form>
                                         <a class="btn btn-sm btn-outline-primary" asp-controller="BlogPost" asp-action="Details" asp-route-id="@post.Id">Read</a>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     }
-                </div>
-            }
-            else
-            {
-                <div class="alert alert-secondary">No posts found.</div>
-            }
+                
+                }
+                    else
+                    {
+                        <div class="alert alert-secondary">No posts found.</div>
+                    }
+            </div>
         </main>
     </div>
 </div>
+
+@section Scripts {
+    <script>
+        (function () {
+            const profileId = '@Model?.Profile?.Id';
+            if (!profileId) return;
+
+            const afTokenInput = document.querySelector('#afForm input[name="__RequestVerificationToken"]');
+            const token = afTokenInput ? afTokenInput.value : null;
+
+            function sendFile(url, file, successCb, errorCb) {
+                const fd = new FormData();
+                fd.append('file', file);
+                if (token) fd.append('__RequestVerificationToken', token);
+
+                fetch(url, {
+                    method: 'POST',
+                    body: fd
+                })
+                .then(r => r.json())
+                .then(json => {
+                    if (json && json.success) successCb(json.url);
+                    else errorCb(json && json.error ? json.error : 'Upload failed');
+                })
+                .catch(err => errorCb(err && err.message ? err.message : 'Network error'));
+            }
+
+            // Profile photo handlers
+            const profileBtn = document.getElementById('profileUploadBtn');
+            const profileInput = document.getElementById('profileInput');
+            const profileImg = document.getElementById('profilePhoto');
+            if (profileBtn && profileInput && profileImg) {
+                profileBtn.addEventListener('click', () => profileInput.click());
+                profileInput.addEventListener('change', () => {
+                    const file = profileInput.files[0];
+                    if (!file) return;
+                    const url = '@Url.Action("UploadProfileImage", "Profile", new { area = "User" })' + '?id=' + profileId;
+                    sendFile(url, file, (newUrl) => {
+                        profileImg.src = newUrl;
+                    }, (err) => alert('Upload error: ' + err));
+                });
+            }
+
+            // Cover photo handlers
+            const coverBtn = document.getElementById('coverUploadBtn');
+            const coverInput = document.getElementById('coverInput');
+            const coverDiv = document.getElementById('coverDiv');
+            if (coverBtn && coverInput && coverDiv) {
+                coverBtn.addEventListener('click', () => coverInput.click());
+                coverInput.addEventListener('change', () => {
+                    const file = coverInput.files[0];
+                    if (!file) return;
+                    const url = '@Url.Action("UploadCoverImage", "Profile", new { area = "User" })' + '?id=' + profileId;
+                    sendFile(url, file, (newUrl) => {
+                        coverDiv.style.backgroundImage = 'url(' + newUrl + ')';
+                    }, (err) => alert('Upload error: ' + err));
+                });
+            }
+        })();
+    </script>
+}
