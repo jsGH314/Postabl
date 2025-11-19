@@ -4,48 +4,46 @@
     ViewData["Title"] = "Delete";
 }
 
-<h1>Delete</h1>
+<div class="container">
+    <div class="row justify-content-center my-4">
+        <div class="col-12 col-md-10 col-lg-8">
+            <div class="card shadow-sm border-0">
+                <div class="card-body">
+                    <div class="d-flex align-items-start justify-content-between mb-3">
+                        <div>
+                            <h2 class="h4 mb-1 text-danger">Delete post</h2>
+                            <p class="text-muted mb-0">This action cannot be undone. Please confirm you want to remove this post.</p>
+                        </div>
+                        <a asp-area="User" asp-controller="Profile" asp-action="Profile" class="btn btn-outline-secondary btn-sm">Back to profile</a>
+                    </div>
 
-<h3>Are you sure you want to delete this?</h3>
-<div>
-    <h4>BlogPost</h4>
-    <hr />
-    <dl class="row">
-        <dt class = "col-sm-2">
-            @Html.DisplayNameFor(model => model.Title)
-        </dt>
-        <dd class = "col-sm-10">
-            @Html.DisplayFor(model => model.Title)
-        </dd>
-        <dt class = "col-sm-2">
-            @Html.DisplayNameFor(model => model.Content)
-        </dt>
-        <dd class = "col-sm-10">
-            @Html.DisplayFor(model => model.Content)
-        </dd>
-        <dt class = "col-sm-2">
-            @Html.DisplayNameFor(model => model.PublishedDate)
-        </dt>
-        <dd class = "col-sm-10">
-            @Html.DisplayFor(model => model.PublishedDate)
-        </dd>
-        <dt class = "col-sm-2">
-            @Html.DisplayNameFor(model => model.Author)
-        </dt>
-        <dd class = "col-sm-10">
-            @Html.DisplayFor(model => model.Author)
-        </dd>
-        <dt class = "col-sm-2">
-            @Html.DisplayNameFor(model => model.Likes)
-        </dt>
-        <dd class = "col-sm-10">
-            @Html.DisplayFor(model => model.Likes)
-        </dd>
-    </dl>
-    
-    <form asp-action="Delete">
-        <input type="hidden" asp-for="Id" />
-        <input type="submit" value="Delete" class="btn btn-danger" /> |
-        <a asp-action="Index">Back to List</a>
-    </form>
+                    <div class="mb-3">
+                        <h3 class="h5">@Html.DisplayFor(m => m.Title)</h3>
+                        <div class="text-muted mb-2">
+                            <small>@Html.DisplayFor(m => m.Author) • @Html.DisplayFor(m => m.PublishedDate)</small>
+                        </div>
+                        <div class="card mb-3">
+                            <div class="card-body">
+                                <p class="mb-0">@Html.DisplayFor(m => m.Content)</p>
+                            </div>
+                        </div>
+
+                        <dl class="row text-muted small">
+                            <dt class="col-sm-3">Likes</dt>
+                            <dd class="col-sm-9">@Html.DisplayFor(m => m.Likes)</dd>
+                            <dt class="col-sm-3">Visibility</dt>
+                            <dd class="col-sm-9">@((Model.IsPublic) ? "Public" : "Followers only")</dd>
+                        </dl>
+                    </div>
+
+                    <form asp-action="Delete" method="post" class="d-flex gap-2">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" asp-for="Id" />
+                        <button type="submit" class="btn btn-danger">Confirm Delete</button>
+                        <a asp-action="Details" asp-route-id="@Model?.Id" class="btn btn-outline-secondary">Cancel</a>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
 </div>

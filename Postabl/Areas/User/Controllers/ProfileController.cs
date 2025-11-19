@@ -52,25 +52,6 @@ namespace Postabl.Areas.User.Controllers
                 return View(blogPostList);
             }
             return View();
-
-            /////////////////////View test posts
-            //IEnumerable<BlogPost> blogPosts = new List<BlogPost>
-            //{
-            //    new BlogPost { Id = 1, Title = "First Post", Content = "This is the content of the first post.", Author = "Admin", PublishedDate = DateTime.Now, IsPublic = true },
-            //    new BlogPost { Id = 2, Title = "Second Post", Content = "This is the content of the second post.", Author = "Admin", PublishedDate = DateTime.Now, IsPublic = true }
-            //};
-            ////var blogPosts = await _context.BlogPosts.ToListAsync();
-            //return View(blogPosts);
-
-            //View All posts made by logged in user
-            //Get Current logged in userId
-            //var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            //if(User.IsInRole(SD.Role_User))
-            //{
-            //    IEnumerable<BlogPost> BlogPostList = _context.BlogPosts.Where(b => b.ApplicationUserId == userId).ToList();
-            //    return View(BlogPostList);
-            //}
-            //return View();
         }
 
         // GET: User/Profile

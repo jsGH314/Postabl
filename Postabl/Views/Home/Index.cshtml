@@ -27,7 +27,7 @@
                         <div class="d-flex justify-content-between align-items-start mb-2">
                             <div>
                                 <h5 class="card-title mb-1">@item.Post.Title</h5>
-                                <small class="text-muted">@item.Post.Author • @item.Post.PublishedDate.ToString("MMM d, yyyy")</small>
+                                <small class="text-muted">@item.Profile.DisplayName • @item.Post.PublishedDate.ToString("MMM d, yyyy")</small>
                             </div>
                             <div class="text-end">
                                 <small class="text-muted">@((item.Post.IsPublic) ? "Public" : "Followers only")</small>

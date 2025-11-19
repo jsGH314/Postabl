@@ -10,6 +10,7 @@ using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
 using System.Net;
+using Microsoft.AspNetCore.Authorization;
 
 namespace Postabl.Areas.User.Controllers
 {
@@ -72,14 +73,32 @@ namespace Postabl.Areas.User.Controllers
                 return NotFound();
             }
 
+            // Include ApplicationUser -> Profile so we can map profile id and image safely
             var blogPost = await _context.BlogPosts
+                .Include(b => b.ApplicationUser)
+                    .ThenInclude(u => u.Profile)
                 .FirstOrDefaultAsync(m => m.Id == id);
+
             if (blogPost == null)
             {
                 return NotFound();
             }
 
-            return View(blogPost);
+            // Map to a view model for reading a post
+            var postVM = new PostDetailsVM
+            {
+                Id = blogPost.Id,
+                Title = blogPost.Title,
+                Content = blogPost.Content,
+                Author = blogPost.Author,
+                PublishedDate = blogPost.PublishedDate,
+                Likes = blogPost.Likes,
+                IsPublic = blogPost.IsPublic,
+                ProfileId = blogPost.ApplicationUser?.Profile?.Id,
+                ProfileImageUrl = blogPost.ApplicationUser?.Profile?.ProfileImageUrl
+            };
+
+            return View(postVM);
         }
 
         // GET: User/BlogPost/Create
@@ -115,9 +134,10 @@ namespace Postabl.Areas.User.Controllers
                 blogPost.Likes = 0;
                 _context.Add(blogPost);
                 await _context.SaveChangesAsync();
-                return RedirectToAction(nameof(Index));
+                return RedirectToAction("Profile", "Profile");
             }
-            return View(blogPost);
+            return RedirectToAction("Profile", "Profile");
+            //return View(blogPost);
         }
 
         // GET: User/BlogPost/Edit/5
@@ -141,34 +161,45 @@ namespace Postabl.Areas.User.Controllers
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,Content,PublishedDate,Author,Likes,ProfileId")] BlogPost blogPost)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,Content,IsPublic")] BlogPost posted)
         {
-            if (id != blogPost.Id)
+            if (id != posted.Id)
             {
                 return NotFound();
             }
 
-            if (ModelState.IsValid)
+            if (!ModelState.IsValid)
             {
-                try
-                {
-                    _context.Update(blogPost);
-                    await _context.SaveChangesAsync();
-                }
-                catch (DbUpdateConcurrencyException)
-                {
-                    if (!BlogPostExists(blogPost.Id))
-                    {
-                        return NotFound();
-                    }
-                    else
-                    {
-                        throw;
-                    }
-                }
-                return RedirectToAction(nameof(Index));
+                // load full entity to re-render the view (preserve fields not posted)
+                var reload = await _context.BlogPosts
+                    .Include(b => b.ApplicationUser)
+                        .ThenInclude(u => u.Profile)
+                    .FirstOrDefaultAsync(b => b.Id == id);
+                return View(reload ?? posted);
             }
-            return View(blogPost);
+
+            // Load existing entity from DB so we only update allowed properties and preserve the FK
+            var existing = await _context.BlogPosts.FirstOrDefaultAsync(b => b.Id == id);
+            if (existing == null) return NotFound();
+
+            // Copy only editable fields
+            existing.Title = posted.Title;
+            existing.Content = posted.Content;
+            existing.IsPublic = posted.IsPublic;
+
+            try
+            {
+                _context.Update(existing);
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateConcurrencyException)
+            {
+                if (!BlogPostExists(existing.Id)) return NotFound();
+                throw;
+            }
+
+            // Redirect to the post details (or Index) to avoid repost
+            return RedirectToAction(nameof(Details), new { id = existing.Id });
         }
 
         // GET: User/BlogPost/Delete/5
@@ -201,7 +232,7 @@ namespace Postabl.Areas.User.Controllers
             }
 
             await _context.SaveChangesAsync();
-            return RedirectToAction(nameof(Index));
+            return RedirectToAction("Profile", "Profile");
         }
 
         // POST: User/BlogPost/Like
@@ -223,15 +254,43 @@ namespace Postabl.Areas.User.Controllers
                 return Redirect(loginUrl);
             }
 
-            var blogPost = await _context.BlogPosts.FindAsync(id);
-            if (blogPost == null)
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            if (string.IsNullOrEmpty(userId)) return Forbid();
+
+            var blogPost = await _context.BlogPosts.FirstOrDefaultAsync(b => b.Id == id);
+            if (blogPost == null) return NotFound();
+
+            // parse LikedBy JSON into HashSet<string>
+            var likedBy = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            if (!string.IsNullOrWhiteSpace(blogPost.LikedBy))
             {
-                return NotFound();
+                try
+                {
+                    likedBy = System.Text.Json.JsonSerializer.Deserialize<HashSet<string>>(blogPost.LikedBy) ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                }
+                catch
+                {
+                    // If deserialization fails, reset to empty set to avoid blocking users
+                    likedBy = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                }
             }
 
-            // Simple increment; you can add further checks (one-like-per-user) if desired
-            blogPost.Likes += 1;
-            _context.Update(blogPost);
+            if (likedBy.Contains(userId))
+            {
+                // remove like
+                likedBy.Remove(userId);
+            }
+            else
+            {
+                // add like
+                likedBy.Add(userId);
+            }
+
+            // keep aggregate Likes in sync with the stored list
+            blogPost.Likes = likedBy.Count;
+            blogPost.LikedBy = System.Text.Json.JsonSerializer.Serialize(likedBy);
+
+            _context.BlogPosts.Update(blogPost);
             await _context.SaveChangesAsync();
 
             // Return to the referring page when possible (feed or post view)
@@ -247,14 +306,28 @@ namespace Postabl.Areas.User.Controllers
         // POST: User/BlogPost/QuickPost
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> QuickPost(string content)
+        [Authorize] // require logged-in user
+        public async Task<IActionResult> QuickPost(string content, bool isPublic)
         {
             if (string.IsNullOrWhiteSpace(content))
             {
                 return BadRequest("Content cannot be empty.");
             }
+
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            //if (string.IsNullOrEmpty(userId))
+            //{
+            //    // redirect to login (preserves return URL)
+            //    var returnUrl = Url.Action("Profile", "Profile", new { area = "User" });
+            //    return Redirect($"/Identity/Account/Login?returnUrl={UrlEncoder.Default.Encode(returnUrl)}");
+            //}
+
             var user = await _context.ApplicationUsers.FirstOrDefaultAsync(u => u.Id == userId);
+            if (user == null)
+            {
+                return BadRequest("User not found.");
+            }
+
             var blogPost = new BlogPost
             {
                 ApplicationUserId = userId,
@@ -263,7 +336,7 @@ namespace Postabl.Areas.User.Controllers
                 Title = "Quick Post",
                 PublishedDate = DateTime.Now,
                 Likes = 0,
-                IsPublic = true
+                IsPublic = isPublic
             };
             _context.Add(blogPost);
             await _context.SaveChangesAsync();

@@ -1,76 +1,12 @@
-﻿@* @model Models.Profile
-
-@{
-    ViewData["Title"] = "Edit";
-}
-
-<h1>Edit</h1>
-
-<h4>Profile</h4>
-<hr />
-<div class="row">
-    <div class="col-md-6">
-        <form asp-action="Edit" enctype="multipart/form-data" method="post">
-            @Html.AntiForgeryToken()
-            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-            <input type="hidden" asp-for="Id" />
-            <div class="form-group mb-3">
-                <label asp-for="Bio" class="control-label"></label>
-                <input asp-for="Bio" class="form-control" />
-                <span asp-validation-for="Bio" class="text-danger"></span>
-            </div>
-            <div class="form-group mb-3">
-                <label asp-for="DisplayName" class="control-label"></label>
-                <input asp-for="DisplayName" class="form-control" />
-                <span asp-validation-for="DisplayName" class="text-danger"></span>
-            </div>
-
-            <div class="form-group mb-3">
-                <label class="control-label">Profile photo</label>
-                @if (!string.IsNullOrWhiteSpace(Model?.ProfileImageUrl))
-                {
-                    <div class="mb-2">
-                        <img src="@Model.ProfileImageUrl" alt="Profile image" style="width:96px;height:96px;object-fit:cover;border-radius:50%;" />
-                    </div>
-                }
-                <input type="file" name="ProfileImage" accept="image/*" class="form-control" />
-            </div>
-
-            <div class="form-group mb-3">
-                <label class="control-label">Cover photo</label>
-                @if (!string.IsNullOrWhiteSpace(Model?.CoverImageUrl))
-                {
-                    <div class="mb-2">
-                        <img src="@Model.CoverImageUrl" alt="Cover image" style="width:200px;height:80px;object-fit:cover;border-radius:.25rem;" />
-                    </div>
-                }
-                <input type="file" name="CoverImage" accept="image/*" class="form-control" />
-            </div>
-
-            <div class="form-group">
-                <input type="submit" value="Save" class="btn btn-primary" />
-            </div>
-        </form>
-    </div>
-</div>
-
-<div>
-    <a asp-area="User" asp-controller="Profile" asp-action="Index">Back to Profile</a>
-</div>
-
-@section Scripts {
-    @{
-        await Html.RenderPartialAsync("_ValidationScriptsPartial");
-    }
-} *@
-
-@model Models.Profile
+﻿@model Models.Profile
 
 @{
     ViewData["Title"] = "Profile";
     string photoUrl = string.IsNullOrWhiteSpace(Model?.ProfileImageUrl) ? "/images/placeholder-profile.png" : Model.ProfileImageUrl;
     string coverUrl = string.IsNullOrWhiteSpace(Model?.CoverImageUrl) ? "/images/placeholder-cover.jpg" : Model.CoverImageUrl;
 }
+
+@* This page will be used as an edit profile/profile settings page *@
 
 
 <!-- Anti-forgery token (read by JS) -->
@@ -79,6 +15,7 @@
 <!-- Page header / cover with overlay upload -->
 <div id="coverDiv" class="profile-cover mb-3 cover-wrapper" style="background-image: url('@coverUrl'); background-size: cover; background-position: center; height:180px;">
     <div class="cover-overlay">
+        @* COVER IMAGE UPLOAD OVERLAY BTN *@
         <button id="coverUploadBtn" type="button" class="overlay-btn btn btn-sm">Change cover</button>
     </div>
     <input id="coverInput" type="file" accept="image/*" style="display:none" />
@@ -120,6 +57,7 @@
                     <div class="image-wrapper">
                         <img id="profilePhoto" src="@photoUrl" alt="Profile photo" class="rounded-circle mb-3" style="width:140px;height:140px;object-fit:cover;">
                         <div class="image-overlay">
+                            @* PROFILE IMG UPLOAD OVERLAY *@
                             <button id="profileUploadBtn" type="button" class="overlay-btn btn btn-sm">Change</button>
                         </div>
                         <input id="profileInput" type="file" accept="image/*" style="display:none" />

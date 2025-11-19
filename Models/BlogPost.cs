@@ -20,8 +20,10 @@ namespace Models
         //Visibility status- if it is set to private, only followers can see it
         public bool IsPublic { get; set; } = true;
         public int Likes { get; set; } = 0;
-        //TODO: Enable commenting on posts
-        //public List<Comment> Comments { get; set; } = new List<Comment>();
+
+        // New: JSON list of user ids who liked this post (keeps per-user info without a separate model)
+        // Example content: ["userId1","userId2"]
+        public string LikedBy { get; set; } = string.Empty;
 
         //Navigation property to ApplicationUser
         [ValidateNever]

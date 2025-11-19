@@ -1,48 +1,66 @@
-﻿@model Models.BlogPost
+﻿@model Models.ViewModels.PostDetailsVM
 
 @{
-    ViewData["Title"] = "Details";
+    ViewData["Title"] = "Post";
 }
+@* Added this using to check if user is logged in for likes *@
+@using System.Net
 
-<h1>Details</h1>
+<div class="post-container">
+    <article class="post-card" aria-labelledby="post-title-@Model?.Id">
+        <a asp-area="User" asp-controller="Profile" asp-action="ViewPublicProfile" asp-route-id="@Model?.ProfileId" class="d-block" title="View author profile">
+            <img src="@(string.IsNullOrWhiteSpace(Model?.ProfileImageUrl) ? Url.Content("~/images/placeholder-profile.png") : Model?.ProfileImageUrl)"
+                 alt="Avatar of @Model?.Author"
+                 class="post-avatar" />
+        </a>
 
-<div>
-    <h4>BlogPost</h4>
-    <hr />
-    <dl class="row">
-        <dt class = "col-sm-2">
-            @Html.DisplayNameFor(model => model.Title)
-        </dt>
-        <dd class = "col-sm-10">
-            @Html.DisplayFor(model => model.Title)
-        </dd>
-        <dt class = "col-sm-2">
-            @Html.DisplayNameFor(model => model.Content)
-        </dt>
-        <dd class = "col-sm-10">
-            @Html.DisplayFor(model => model.Content)
-        </dd>
-        <dt class = "col-sm-2">
-            @Html.DisplayNameFor(model => model.PublishedDate)
-        </dt>
-        <dd class = "col-sm-10">
-            @Html.DisplayFor(model => model.PublishedDate)
-        </dd>
-        <dt class = "col-sm-2">
-            @Html.DisplayNameFor(model => model.Author)
-        </dt>
-        <dd class = "col-sm-10">
-            @Html.DisplayFor(model => model.Author)
-        </dd>
-        <dt class = "col-sm-2">
-            @Html.DisplayNameFor(model => model.Likes)
-        </dt>
-        <dd class = "col-sm-10">
-            @Html.DisplayFor(model => model.Likes)
-        </dd>
-    </dl>
-</div>
-<div>
-    <a asp-action="Edit" asp-route-id="@Model?.Id">Edit</a> |
-    <a asp-action="Index">Back to List</a>
+        <div>
+            <div class="post-meta">
+                <div>
+                    <h1 id="post-title-@Model?.Id" class="post-title h4">@Model?.Title</h1>
+                    <div class="text-muted">
+                        <small>@Model?.Author • @Model?.PublishedDate.ToString("MMM d, yyyy")</small>
+                    </div>
+                </div>
+
+                <div class="text-end">
+                    <small class="text-muted">@((Model?.IsPublic ?? false) ? "Public" : "Followers only")</small>
+                </div>
+            </div>
+
+            <div class="post-content">
+                @Html.Raw(Html.Encode(Model?.Content ?? string.Empty).Replace("\n", "<br />"))
+            </div>
+
+            <div class="post-actions">
+                @if (User?.Identity?.IsAuthenticated ?? false)
+                {
+                    <form asp-area="User" asp-controller="BlogPost" asp-action="Like" method="post" class="d-inline">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@Model?.Id" />
+                        <button type="submit" class="btn btn-sm btn-outline-secondary" title="Like" aria-label="Like post">
+                            <span class="me-1">❤️</span> @Model?.Likes
+                        </button>
+                    </form>
+                }
+                else
+                {
+                    var returnUrl = (Context.Request.Path + Context.Request.QueryString).ToString();
+                    <a class="btn btn-sm btn-outline-secondary" title="Sign in to like"
+                       href="@( $"/Identity/Account/Login?returnUrl={WebUtility.UrlEncode(returnUrl)}" )">
+                        <span class="me-1">❤️</span> @Model?.Likes
+                    </a>
+
+                    <a class="btn btn-sm btn-outline-secondary" title="Register"
+                       href="@( $"/Identity/Account/Register?returnUrl={WebUtility.UrlEncode(returnUrl)}" )">
+                        Register
+                    </a>
+                }
+
+                <a asp-area="User" asp-controller="Profile" asp-action="Profile" class="btn btn-sm btn-light">Back to profile</a>
+                <a asp-action="Edit" asp-route-id="@Model?.Id" class="btn btn-sm btn-light">Edit</a>
+            </div>
+            
+        </div>
+    </article>
 </div>

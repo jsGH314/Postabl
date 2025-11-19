@@ -4,51 +4,61 @@
     ViewData["Title"] = "Edit";
 }
 
-<h1>Edit</h1>
+<div class="container">
+    <div class="row justify-content-center my-4">
+        <div class="col-12 col-md-10 col-lg-8">
+            <div class="card shadow-sm border-0">
+                <div class="card-body">
+                    <div class="d-flex align-items-start justify-content-between mb-3">
+                        <div>
+                            <h2 class="h4 mb-1">Edit post</h2>
+                            <p class="text-muted mb-0">Update your post content and visibility settings.</p>
+                        </div>
+                        <a asp-area="User" asp-controller="Profile" asp-action="Profile" class="btn btn-outline-secondary btn-sm">Back to profile</a>
+                    </div>
 
-<h4>BlogPost</h4>
-<hr />
-<div class="row">
-    <div class="col-md-4">
-        <form asp-action="Edit">
-            <div asp-validation-summary="ModelOnly" class="text-danger"></div>
-            <input type="hidden" asp-for="Id" />
-            <div class="form-group">
-                <label asp-for="Title" class="control-label"></label>
-                <input asp-for="Title" class="form-control" />
-                <span asp-validation-for="Title" class="text-danger"></span>
+                    <form asp-action="Edit" method="post" class="needs-validation" novalidate>
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" asp-for="Id" />
+
+                        <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+
+                        <div class="mb-3 form-floating">
+                            <input asp-for="Title" class="form-control form-control-lg" id="Title" placeholder="Title" />
+                            <label for="Title">Title</label>
+                            <span asp-validation-for="Title" class="text-danger"></span>
+                        </div>
+
+                        <div class="mb-3">
+                            <label for="Content" class="form-label visually-hidden">Content</label>
+                            <textarea asp-for="Content" id="Content" class="form-control form-control-lg" rows="8" placeholder="Write something..."></textarea>
+                            <span asp-validation-for="Content" class="text-danger"></span>
+                        </div>
+
+                        <div class="d-flex flex-column flex-sm-row justify-content-between align-items-center gap-3 mt-3">
+                            <div class="d-flex align-items-center">
+                                <!-- ensure a value is always posted when unchecked -->
+                                <input type="hidden" name="IsPublic" value="false" />
+                                <div class="form-check form-switch me-2">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="IsPublic" name="IsPublic" value="true" @(Model.IsPublic ? "checked" : "") />
+                                    <label class="form-check-label" for="IsPublic">Public</label>
+                                </div>
+                                <small class="text-muted">Visible to everyone when enabled</small>
+                            </div>
+
+                            <div class="d-flex gap-2">
+                                <a asp-area="User" asp-controller="BlogPost" asp-action="Delete" asp-route-id="@Model?.Id" class="btn btn-outline-danger">Delete</a>
+                                <a asp-action="Details" asp-route-id="@Model?.Id" class="btn btn-outline-secondary">Cancel</a>
+                                <button type="submit" class="btn btn-primary">Save</button>
+                            </div>
+                        </div>
+                    </form>
+                </div>
             </div>
-            <div class="form-group">
-                <label asp-for="Content" class="control-label"></label>
-                <input asp-for="Content" class="form-control" />
-                <span asp-validation-for="Content" class="text-danger"></span>
-            </div>
-            <div class="form-group">
-                <label asp-for="PublishedDate" class="control-label"></label>
-                <input asp-for="PublishedDate" class="form-control" />
-                <span asp-validation-for="PublishedDate" class="text-danger"></span>
-            </div>
-            <div class="form-group">
-                <label asp-for="Author" class="control-label"></label>
-                <input asp-for="Author" class="form-control" />
-                <span asp-validation-for="Author" class="text-danger"></span>
-            </div>
-            <div class="form-group">
-                <label asp-for="Likes" class="control-label"></label>
-                <input asp-for="Likes" class="form-control" />
-                <span asp-validation-for="Likes" class="text-danger"></span>
-            </div>
-            <div class="form-group">
-                <input type="submit" value="Save" class="btn btn-primary" />
-            </div>
-        </form>
+        </div>
     </div>
 </div>
 
-<div>
-    <a asp-action="Index">Back to List</a>
-</div>
-
 @section Scripts {
-    @{await Html.RenderPartialAsync("_ValidationScriptsPartial");}
+    @{ await Html.RenderPartialAsync("_ValidationScriptsPartial"); }
 }
