@@ -1,4 +1,7 @@
 ﻿using DAL;
+using DAL.Repository;
+using DAL.Repository.IRepository;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Microsoft.EntityFrameworkCore;
@@ -7,10 +10,9 @@ using Models.ViewModels;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using System.Net;
-using Microsoft.AspNetCore.Authorization;
 
 namespace Postabl.Areas.User.Controllers
 {
@@ -18,16 +20,18 @@ namespace Postabl.Areas.User.Controllers
     public class BlogPostController : Controller
     {
         private readonly ApplicationDbContext _context;
+        private readonly IUnitOfWork _unitOfWork;
 
-        public BlogPostController(ApplicationDbContext context)
+        public BlogPostController(ApplicationDbContext context, IUnitOfWork unitOfWork)
         {
             _context = context;
+            _unitOfWork = unitOfWork;
         }
 
         // GET: User/BlogPost
         public async Task<IActionResult> Index()
         {
-            return View(await _context.BlogPosts.ToListAsync());
+            return View(_unitOfWork.BlogPost.GetAll());
         }
 
         public async Task<IActionResult> ViewPost(int? id)
@@ -38,10 +42,14 @@ namespace Postabl.Areas.User.Controllers
             }
 
             // Include ApplicationUser -> Profile so we can map profile id and image safely
-            var blogPost = await _context.BlogPosts
-                .Include(b => b.ApplicationUser)
-                    .ThenInclude(u => u.Profile)
-                .FirstOrDefaultAsync(m => m.Id == id);
+            // OLD WAY:
+            //var blogPost = await _context.BlogPosts
+            //    .Include(b => b.ApplicationUser)
+            //        .ThenInclude(u => u.Profile)
+            //    .FirstOrDefaultAsync(m => m.Id == id);
+
+            var blogPost = _unitOfWork.BlogPost.Get(b => b.Id == id);
+            var profile = _unitOfWork.Profile.Get(p => p.ApplicationUserId == blogPost.ApplicationUserId);
 
             if (blogPost == null)
             {
@@ -58,8 +66,8 @@ namespace Postabl.Areas.User.Controllers
                 PublishedDate = blogPost.PublishedDate,
                 Likes = blogPost.Likes,
                 IsPublic = blogPost.IsPublic,
-                ProfileId = blogPost.ApplicationUser?.Profile?.Id,
-                ProfileImageUrl = blogPost.ApplicationUser?.Profile?.ProfileImageUrl
+                ProfileId = profile?.Id,
+                ProfileImageUrl = profile?.ProfileImageUrl
             };
 
             return View(postVM);
@@ -74,10 +82,14 @@ namespace Postabl.Areas.User.Controllers
             }
 
             // Include ApplicationUser -> Profile so we can map profile id and image safely
-            var blogPost = await _context.BlogPosts
-                .Include(b => b.ApplicationUser)
-                    .ThenInclude(u => u.Profile)
-                .FirstOrDefaultAsync(m => m.Id == id);
+            // OLD METHOD
+            //var blogPost = await _context.BlogPosts
+            //    .Include(b => b.ApplicationUser)
+            //        .ThenInclude(u => u.Profile)
+            //    .FirstOrDefaultAsync(m => m.Id == id);
+
+            var blogPost = _unitOfWork.BlogPost.Get(b => b.Id == id);
+            var profile = _unitOfWork.Profile.Get(p => p.ApplicationUserId == blogPost.ApplicationUserId);
 
             if (blogPost == null)
             {
@@ -94,8 +106,8 @@ namespace Postabl.Areas.User.Controllers
                 PublishedDate = blogPost.PublishedDate,
                 Likes = blogPost.Likes,
                 IsPublic = blogPost.IsPublic,
-                ProfileId = blogPost.ApplicationUser?.Profile?.Id,
-                ProfileImageUrl = blogPost.ApplicationUser?.Profile?.ProfileImageUrl
+                ProfileId = profile?.Id,
+                ProfileImageUrl = profile?.ProfileImageUrl
             };
 
             return View(postVM);
@@ -119,25 +131,19 @@ namespace Postabl.Areas.User.Controllers
         public async Task<IActionResult> Create([Bind("Id,ApplicationUserId,Title,Content,PublishedDate,Author,Likes,IsPublic")] BlogPost blogPost)
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            var user = await _context.ApplicationUsers.FirstOrDefaultAsync(u => u.Id == userId);
-            //blogPost.Author = user!.Name;
-            //blogPost.ApplicationUserId = user.Id;
-            //blogPost.ApplicationUser = user;
+            var user = _unitOfWork.ApplicationUser.Get(u => u.Id == userId);
 
             if (ModelState.IsValid)
             {
-                //blogPost.IsPublic = true;
-                //blogPost.ApplicationUser = user!;
                 blogPost.ApplicationUserId = userId;
                 blogPost.PublishedDate = DateTime.Now;
                 blogPost.Author = user.Name;
                 blogPost.Likes = 0;
-                _context.Add(blogPost);
-                await _context.SaveChangesAsync();
+                _unitOfWork.BlogPost.Add(blogPost);
+                _unitOfWork.Save();
                 return RedirectToAction("Profile", "Profile");
             }
             return RedirectToAction("Profile", "Profile");
-            //return View(blogPost);
         }
 
         // GET: User/BlogPost/Edit/5
@@ -148,7 +154,8 @@ namespace Postabl.Areas.User.Controllers
                 return NotFound();
             }
 
-            var blogPost = await _context.BlogPosts.FindAsync(id);
+            //var blogPost = await _context.BlogPosts.FindAsync(id);
+            var blogPost = _unitOfWork.BlogPost.Get(b => b.Id == id);
             if (blogPost == null)
             {
                 return NotFound();
@@ -161,7 +168,7 @@ namespace Postabl.Areas.User.Controllers
         // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,Content,IsPublic")] BlogPost posted)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Title,Content,IsPublic")] BlogPost posted, bool isPublic)
         {
             if (id != posted.Id)
             {
@@ -171,26 +178,29 @@ namespace Postabl.Areas.User.Controllers
             if (!ModelState.IsValid)
             {
                 // load full entity to re-render the view (preserve fields not posted)
-                var reload = await _context.BlogPosts
-                    .Include(b => b.ApplicationUser)
-                        .ThenInclude(u => u.Profile)
-                    .FirstOrDefaultAsync(b => b.Id == id);
+                //var reload = await _context.BlogPosts
+                //    .Include(b => b.ApplicationUser)
+                //        .ThenInclude(u => u.Profile)
+                //    .FirstOrDefaultAsync(b => b.Id == id);
+                var reload = _unitOfWork.BlogPost.Get(b => b.Id == id);
                 return View(reload ?? posted);
             }
 
             // Load existing entity from DB so we only update allowed properties and preserve the FK
-            var existing = await _context.BlogPosts.FirstOrDefaultAsync(b => b.Id == id);
+            //var existing = await _context.BlogPosts.FirstOrDefaultAsync(b => b.Id == id);
+            var existing = _unitOfWork.BlogPost.Get(b => b.Id == id);
             if (existing == null) return NotFound();
 
             // Copy only editable fields
             existing.Title = posted.Title;
             existing.Content = posted.Content;
-            existing.IsPublic = posted.IsPublic;
+            existing.IsPublic = isPublic;
 
             try
             {
-                _context.Update(existing);
-                await _context.SaveChangesAsync();
+                _unitOfWork.BlogPost.Update(existing);
+                _unitOfWork.Save();
+                //await _context.SaveChangesAsync();
             }
             catch (DbUpdateConcurrencyException)
             {
@@ -210,8 +220,9 @@ namespace Postabl.Areas.User.Controllers
                 return NotFound();
             }
 
-            var blogPost = await _context.BlogPosts
-                .FirstOrDefaultAsync(m => m.Id == id);
+            //var blogPost = await _context.BlogPosts
+            //    .FirstOrDefaultAsync(m => m.Id == id);
+            var blogPost = _unitOfWork.BlogPost.Get(b => b.Id == id);
             if (blogPost == null)
             {
                 return NotFound();
@@ -225,13 +236,16 @@ namespace Postabl.Areas.User.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            var blogPost = await _context.BlogPosts.FindAsync(id);
+            //var blogPost = await _context.BlogPosts.FindAsync(id);
+            var blogPost = _unitOfWork.BlogPost.Get(b => b.Id == id);
             if (blogPost != null)
             {
-                _context.BlogPosts.Remove(blogPost);
+                //_context.BlogPosts.Remove(blogPost);
+                _unitOfWork.BlogPost.Remove(blogPost);
             }
 
-            await _context.SaveChangesAsync();
+            //await _context.SaveChangesAsync();
+            _unitOfWork.Save();
             return RedirectToAction("Profile", "Profile");
         }
 
@@ -257,7 +271,8 @@ namespace Postabl.Areas.User.Controllers
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userId)) return Forbid();
 
-            var blogPost = await _context.BlogPosts.FirstOrDefaultAsync(b => b.Id == id);
+            //var blogPost = await _context.BlogPosts.FirstOrDefaultAsync(b => b.Id == id);
+            var blogPost = _unitOfWork.BlogPost.Get(b => b.Id == id);
             if (blogPost == null) return NotFound();
 
             // parse LikedBy JSON into HashSet<string>
@@ -290,8 +305,10 @@ namespace Postabl.Areas.User.Controllers
             blogPost.Likes = likedBy.Count;
             blogPost.LikedBy = System.Text.Json.JsonSerializer.Serialize(likedBy);
 
-            _context.BlogPosts.Update(blogPost);
-            await _context.SaveChangesAsync();
+            _unitOfWork.BlogPost.Update(blogPost);
+            //_context.BlogPosts.Update(blogPost);
+            _unitOfWork.Save();
+            //await _context.SaveChangesAsync();
 
             // Return to the referring page when possible (feed or post view)
             var referer = Request.Headers["Referer"].ToString();
@@ -315,6 +332,7 @@ namespace Postabl.Areas.User.Controllers
             }
 
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var user = _unitOfWork.ApplicationUser.Get(u => u.Id == userId);
             //if (string.IsNullOrEmpty(userId))
             //{
             //    // redirect to login (preserves return URL)
@@ -322,25 +340,45 @@ namespace Postabl.Areas.User.Controllers
             //    return Redirect($"/Identity/Account/Login?returnUrl={UrlEncoder.Default.Encode(returnUrl)}");
             //}
 
-            var user = await _context.ApplicationUsers.FirstOrDefaultAsync(u => u.Id == userId);
+            //var user = await _context.ApplicationUsers.FirstOrDefaultAsync(u => u.Id == userId);
+
             if (user == null)
             {
                 return BadRequest("User not found.");
             }
 
-            var blogPost = new BlogPost
+
+            var blogPost = new BlogPost();
+
+            if(ModelState.IsValid)
             {
-                ApplicationUserId = userId,
-                Author = user.Name,
-                Content = content,
-                Title = "Quick Post",
-                PublishedDate = DateTime.Now,
-                Likes = 0,
-                IsPublic = isPublic
-            };
-            _context.Add(blogPost);
-            await _context.SaveChangesAsync();
+                blogPost.ApplicationUserId = userId;
+                blogPost.PublishedDate = DateTime.Now;
+                blogPost.Author = user.Name;
+                blogPost.Content = content;
+                blogPost.Title = "Quick Post";
+                blogPost.IsPublic = isPublic;
+                blogPost.Likes = 0;
+                _unitOfWork.BlogPost.Add(blogPost);
+                _unitOfWork.Save();
+                return RedirectToAction("Profile", "Profile");
+            }
             return RedirectToAction("Profile", "Profile");
+
+
+            //var blogPost = new BlogPost
+            //{
+            //    ApplicationUserId = userId,
+            //    Author = user.Name,
+            //    Content = content,
+            //    Title = "Quick Post",
+            //    PublishedDate = DateTime.Now,
+            //    Likes = 0,
+            //    IsPublic = isPublic
+            //};
+            //_context.Add(blogPost);
+            //await _context.SaveChangesAsync();
+            //return RedirectToAction("Profile", "Profile");
         }
 
         private bool BlogPostExists(int id)

@@ -10,6 +10,7 @@ namespace DAL.Repository.IRepository
     {
         IApplicationUserRepository ApplicationUser { get; }
         IBlogPostRepository BlogPost { get; }
+        IProfileRepository Profile { get; }
         void Save();
     }
 }
