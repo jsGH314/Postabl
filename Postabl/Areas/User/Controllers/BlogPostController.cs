@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading.Tasks;
 
 namespace Postabl.Areas.User.Controllers
@@ -41,20 +42,13 @@ namespace Postabl.Areas.User.Controllers
                 return NotFound();
             }
 
-            // Include ApplicationUser -> Profile so we can map profile id and image safely
-            // OLD WAY:
-            //var blogPost = await _context.BlogPosts
-            //    .Include(b => b.ApplicationUser)
-            //        .ThenInclude(u => u.Profile)
-            //    .FirstOrDefaultAsync(m => m.Id == id);
-
             var blogPost = _unitOfWork.BlogPost.Get(b => b.Id == id);
-            var profile = _unitOfWork.Profile.Get(p => p.ApplicationUserId == blogPost.ApplicationUserId);
-
             if (blogPost == null)
             {
                 return NotFound();
             }
+
+            var profile = _unitOfWork.Profile.Get(p => p.ApplicationUserId == blogPost.ApplicationUserId);
 
             // Map to a view model for reading a post
             var postVM = new PostDetailsVM
@@ -69,6 +63,11 @@ namespace Postabl.Areas.User.Controllers
                 ProfileId = profile?.Id,
                 ProfileImageUrl = profile?.ProfileImageUrl
             };
+
+            // Resolve liked-by ids -> display names and expose to view
+            var likeInfo = ResolveLikedByDisplay(blogPost.LikedBy);
+            ViewBag.LikedByDisplay = likeInfo.Summary;
+            ViewBag.LikedByDisplayNames = likeInfo.Names;
 
             return View(postVM);
         }
@@ -81,20 +80,13 @@ namespace Postabl.Areas.User.Controllers
                 return NotFound();
             }
 
-            // Include ApplicationUser -> Profile so we can map profile id and image safely
-            // OLD METHOD
-            //var blogPost = await _context.BlogPosts
-            //    .Include(b => b.ApplicationUser)
-            //        .ThenInclude(u => u.Profile)
-            //    .FirstOrDefaultAsync(m => m.Id == id);
-
             var blogPost = _unitOfWork.BlogPost.Get(b => b.Id == id);
-            var profile = _unitOfWork.Profile.Get(p => p.ApplicationUserId == blogPost.ApplicationUserId);
-
             if (blogPost == null)
             {
                 return NotFound();
             }
+
+            var profile = _unitOfWork.Profile.Get(p => p.ApplicationUserId == blogPost.ApplicationUserId);
 
             // Map to a view model for reading a post
             var postVM = new PostDetailsVM
@@ -109,6 +101,11 @@ namespace Postabl.Areas.User.Controllers
                 ProfileId = profile?.Id,
                 ProfileImageUrl = profile?.ProfileImageUrl
             };
+
+            // Resolve liked-by ids -> display names and expose to view
+            var likeInfo = ResolveLikedByDisplay(blogPost.LikedBy);
+            ViewBag.LikedByDisplay = likeInfo.Summary;
+            ViewBag.LikedByDisplayNames = likeInfo.Names;
 
             return View(postVM);
         }
@@ -249,6 +246,65 @@ namespace Postabl.Areas.User.Controllers
             return RedirectToAction("Profile", "Profile");
         }
 
+        /// <summary>
+        /// Convert the JSON stored user-id list into display names (Profile.DisplayName, fallback ApplicationUser.Name).
+        /// Returns a tuple: (full list of names in order, friendly summary string).
+        /// Exposed via ViewBag in actions above.
+        /// </summary>
+        private (List<string> Names, string Summary) ResolveLikedByDisplay(string? likedByJson)
+        {
+            var names = new List<string>();
+            if (string.IsNullOrWhiteSpace(likedByJson))
+            {
+                return (names, string.Empty);
+            }
+
+            List<string> ids;
+            try
+            {
+                ids = JsonSerializer.Deserialize<List<string>>(likedByJson) ?? new List<string>();
+            }
+            catch
+            {
+                // malformed JSON: return empty results rather than throwing
+                return (names, string.Empty);
+            }
+
+            if (ids.Count == 0) return (names, string.Empty);
+
+            // Batch-fetch profiles and application users to avoid N+1 queries
+            // IRepository.GetAll() used synchronously in this codebase
+            var profileList = _unitOfWork.Profile.GetAll().Where(p => p != null && ids.Contains(p.ApplicationUserId)).ToList();
+            var profilesByUserId = profileList.ToDictionary(p => p.ApplicationUserId, p => p);
+
+            var appUserList = _unitOfWork.ApplicationUser.GetAll().Where(u => u != null && ids.Contains(u.Id)).ToList();
+            var appUsersById = appUserList.ToDictionary(u => u.Id, u => u);
+
+            foreach (var uid in ids)
+            {
+                if (profilesByUserId.TryGetValue(uid, out var prof) && !string.IsNullOrWhiteSpace(prof.DisplayName))
+                {
+                    names.Add(prof.DisplayName!);
+                    continue;
+                }
+
+                if (appUsersById.TryGetValue(uid, out var au) && !string.IsNullOrWhiteSpace(au.Name))
+                {
+                    names.Add(au.Name);
+                    continue;
+                }
+
+                names.Add("Unknown");
+            }
+
+            string summary;
+            if (names.Count == 0) summary = string.Empty;
+            else if (names.Count <= 3) summary = string.Join(", ", names);
+            else summary = $"{names[0]}, {names[1]} and {names.Count - 2} others";
+
+            return (names, summary);
+        }
+
         // POST: User/BlogPost/Like
         [HttpPost]
         [ValidateAntiForgeryToken]
@@ -271,7 +327,6 @@ namespace Postabl.Areas.User.Controllers
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             if (string.IsNullOrEmpty(userId)) return Forbid();
 
-            //var blogPost = await _context.BlogPosts.FirstOrDefaultAsync(b => b.Id == id);
             var blogPost = _unitOfWork.BlogPost.Get(b => b.Id == id);
             if (blogPost == null) return NotFound();
 
@@ -306,9 +361,7 @@ namespace Postabl.Areas.User.Controllers
             blogPost.LikedBy = System.Text.Json.JsonSerializer.Serialize(likedBy);
 
             _unitOfWork.BlogPost.Update(blogPost);
-            //_context.BlogPosts.Update(blogPost);
             _unitOfWork.Save();
-            //await _context.SaveChangesAsync();
 
             // Return to the referring page when possible (feed or post view)
             var referer = Request.Headers["Referer"].ToString();
@@ -383,7 +436,8 @@ namespace Postabl.Areas.User.Controllers
 
         private bool BlogPostExists(int id)
         {
-            return _context.BlogPosts.Any(e => e.Id == id);
+            //return _context.BlogPosts.Any(e => e.Id == id);
+            return _unitOfWork.BlogPost.Get(b => b.Id == id) != null;
         }
     }
 }

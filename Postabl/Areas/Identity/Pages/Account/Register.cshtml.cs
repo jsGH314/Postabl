@@ -161,7 +161,8 @@ namespace Postabl.Areas.Identity.Pages.Account
                 var profile = new Profile
                 {
                     Bio = Input.Bio,
-                    DisplayName = Input.DisplayName,
+                    //DisplayName = Input.DisplayName,
+                    DisplayName = String.IsNullOrEmpty(Input.DisplayName) ? Input.Name : Input.DisplayName,
                     DateOfBirth = Input.DateOfBirth,
                     ProfileImageUrl = Input.ProfileImageUrl,
                     ApplicationUser = user

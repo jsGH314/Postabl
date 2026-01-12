@@ -58,7 +58,8 @@ namespace Postabl.Areas.User.Controllers
         public async Task<IActionResult> Index()
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            return View(_context.Profiles.FirstOrDefault(x => x.ApplicationUserId == userId));
+            //return View(_context.Profiles.FirstOrDefault(x => x.ApplicationUserId == userId));
+            return View(_unitOfWork.Profile.Get(p => p.ApplicationUserId == userId));
         }
 
         public async Task<IActionResult> Profile()
@@ -67,13 +68,16 @@ namespace Postabl.Areas.User.Controllers
 
             UserProfileVM profileVM = new UserProfileVM()
             {
-                User = await _context.ApplicationUsers.FirstOrDefaultAsync(u => u.Id == userId),
-                Profile = await _context.Profiles.FirstOrDefaultAsync(p => p.ApplicationUserId == userId),
+                //User = await _context.ApplicationUsers.FirstOrDefaultAsync(u => u.Id == userId),
+                User = _unitOfWork.ApplicationUser.Get(u => u.Id == userId),
+                //Profile = await _context.Profiles.FirstOrDefaultAsync(p => p.ApplicationUserId == userId),
+                Profile = _unitOfWork.Profile.Get(p => p.ApplicationUserId == userId),
                 //BlogPostList = await _context.BlogPosts.Where(b => b.ApplicationUserId == userId).ToListAsync()
-                BlogPostList = await _context.BlogPosts
-                    .Where(b => b.ApplicationUserId == userId)
-                    .OrderByDescending(b => b.PublishedDate)
-                    .ToListAsync()
+                //BlogPostList = await _context.BlogPosts
+                    //.Where(b => b.ApplicationUserId == userId)
+                    //.OrderByDescending(b => b.PublishedDate)
+                    //.ToListAsync(),
+                BlogPostList = _unitOfWork.BlogPost.GetAll(b => b.ApplicationUserId == userId).OrderByDescending(b => b.PublishedDate)
             };
 
             return View(profileVM);
@@ -87,12 +91,17 @@ namespace Postabl.Areas.User.Controllers
         {
             if (string.IsNullOrWhiteSpace(id)) return NotFound();
 
-            var user = await _context.ApplicationUsers.FirstOrDefaultAsync(u => u.Id == id);
-            var profile = await _context.Profiles.FirstOrDefaultAsync(p => p.ApplicationUserId == id);
-            var posts = await _context.BlogPosts
-                .Where(b => b.ApplicationUserId == id && b.IsPublic)
+            //var user = await _context.ApplicationUsers.FirstOrDefaultAsync(u => u.Id == id);
+            var user = _unitOfWork.ApplicationUser.Get(u => u.Id == id);
+            //var profile = await _context.Profiles.FirstOrDefaultAsync(p => p.ApplicationUserId == id);
+            var profile = _unitOfWork.Profile.Get(p => p.ApplicationUserId == id);
+            //var posts = await _context.BlogPosts
+            //    .Where(b => b.ApplicationUserId == id && b.IsPublic)
+            //    .OrderByDescending(b => b.PublishedDate)
+            //    .ToListAsync();
+            var posts = _unitOfWork.BlogPost.GetAll(b => b.ApplicationUserId == id && b.IsPublic)
                 .OrderByDescending(b => b.PublishedDate)
-                .ToListAsync();
+                .ToList();
 
             var profileVM = new UserProfileVM
             {
@@ -110,17 +119,24 @@ namespace Postabl.Areas.User.Controllers
         public async Task<IActionResult> ViewPublicProfile(int id)
         {
             // load profile including the related ApplicationUser (if present)
-            var profile = await _context.Profiles
-                .Include(p => p.ApplicationUser)
-                .FirstOrDefaultAsync(p => p.Id == id);
+
+            //var profile = await _context.Profiles
+            //    .Include(p => p.ApplicationUser)
+            //    .FirstOrDefaultAsync(p => p.Id == id);
+
+            var profile = _unitOfWork.Profile.Get(p => p.Id == id);
 
             if (profile == null) return NotFound();
 
             var userId = profile.ApplicationUserId;
-            var posts = await _context.BlogPosts
-                .Where(b => b.ApplicationUserId == userId && b.IsPublic)
+
+            //var posts = await _context.BlogPosts
+            //    .Where(b => b.ApplicationUserId == userId && b.IsPublic)
+            //    .OrderByDescending(b => b.PublishedDate)
+            //    .ToListAsync();
+            var posts = _unitOfWork.BlogPost.GetAll(b => b.ApplicationUserId == userId && b.IsPublic)
                 .OrderByDescending(b => b.PublishedDate)
-                .ToListAsync();
+                .ToList();
 
             var profileVm = new UserProfileVM
             {
@@ -182,7 +198,8 @@ namespace Postabl.Areas.User.Controllers
                return NotFound();
             }
 
-            var profile = await _context.Profiles.FindAsync(id);
+            //var profile = await _context.Profiles.FindAsync(id);
+            var profile = _unitOfWork.Profile.Get(p => p.Id == id);
             if (profile == null)
             {
                 return NotFound();
@@ -206,7 +223,8 @@ namespace Postabl.Areas.User.Controllers
             }
 
             // Load existing entity to preserve FK and any other fields not in the bind list
-            var existing = await _context.Profiles.FirstOrDefaultAsync(p => p.Id == id);
+            //var existing = await _context.Profiles.FirstOrDefaultAsync(p => p.Id == id);
+            var existing = _unitOfWork.Profile.Get(p => p.Id == id);
             if (existing == null) return NotFound();
 
             // Only update allowed fields from the incoming model
@@ -215,12 +233,15 @@ namespace Postabl.Areas.User.Controllers
 
             try
             {
-                _context.Profiles.Update(existing);
-                await _context.SaveChangesAsync();
+                //_context.Profiles.Update(existing);
+                _unitOfWork.Profile.Update(existing);
+                //await _context.SaveChangesAsync();
+                _unitOfWork.Save();
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!_context.Profiles.Any(e => e.Id == id)) return NotFound();
+                //if (!_context.Profiles.Any(e => e.Id == id)) return NotFound();
+                if (_unitOfWork.Profile.Get(p => p.Id == id) == null) return NotFound();
                 throw;
             }
 
@@ -289,7 +310,9 @@ namespace Postabl.Areas.User.Controllers
         {
             if (file == null || file.Length == 0) return BadRequest(new { success = false, error = "No file uploaded" });
 
-            var profile = await _context.Profiles.FirstOrDefaultAsync(p => p.Id == id);
+            //var profile = await _context.Profiles.FirstOrDefaultAsync(p => p.Id == id);
+            var profile = _unitOfWork.Profile.Get(p => p.Id == id);
+
             if (profile == null) return NotFound(new { success = false, error = "Profile not found" });
 
             var uploads = System.IO.Path.Combine(_env.WebRootPath, "uploads", "profiles");
@@ -307,8 +330,10 @@ namespace Postabl.Areas.User.Controllers
             // update DB with cache-busting query so browser fetches new image
             profile.ProfileImageUrl = $"/uploads/profiles/{fileName}?v={DateTime.UtcNow.Ticks}";
 
-            _context.Profiles.Update(profile);
-            await _context.SaveChangesAsync();
+            //_context.Profiles.Update(profile);
+            _unitOfWork.Profile.Update(profile);
+            //await _context.SaveChangesAsync();
+            _unitOfWork.Save();
 
             return Json(new { success = true, url = profile.ProfileImageUrl });
         }
@@ -319,7 +344,8 @@ namespace Postabl.Areas.User.Controllers
         {
             if (file == null || file.Length == 0) return BadRequest(new { success = false, error = "No file uploaded" });
 
-            var profile = await _context.Profiles.FirstOrDefaultAsync(p => p.Id == id);
+            //var profile = await _context.Profiles.FirstOrDefaultAsync(p => p.Id == id);
+            var profile = _unitOfWork.Profile.Get(p => p.Id == id); 
             if (profile == null) return NotFound(new { success = false, error = "Profile not found" });
 
             var uploads = System.IO.Path.Combine(_env.WebRootPath, "uploads", "profiles");
@@ -336,8 +362,10 @@ namespace Postabl.Areas.User.Controllers
 
             profile.CoverImageUrl = $"/uploads/profiles/{fileName}?v={DateTime.UtcNow.Ticks}";
 
-            _context.Profiles.Update(profile);
-            await _context.SaveChangesAsync();
+            //_context.Profiles.Update(profile);
+            _unitOfWork.Profile.Update(profile);
+            //await _context.SaveChangesAsync();
+            _unitOfWork.Save();
 
             return Json(new { success = true, url = profile.CoverImageUrl });
         }
