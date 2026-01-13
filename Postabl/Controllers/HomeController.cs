@@ -45,25 +45,20 @@ namespace Postabl.Controllers
             var posts = query
                 .Skip((page - 1) * pageSize)
                 .Take(pageSize)
-                .ToList(); // use ToListAsync() if you add async EF Core call
+                .ToList();
 
             var userIds = posts.Select(p => p.ApplicationUserId).Where(id => id != null).Distinct().ToList();
             var profiles = _context.Profiles
                 .Where(p => userIds.Contains(p.ApplicationUserId))
                 .ToDictionary(p => p.ApplicationUserId, p => p);
 
-
             var postCards = posts.Select(p => new PostCardVM
             {
                 Post = p,
-                ProfileImageUrl = profiles.TryGetValue(p.ApplicationUserId, out var prof) && !string.IsNullOrWhiteSpace(prof.ProfileImageUrl)
-                    ? prof.ProfileImageUrl
-                    : "/images/placeholder-profile.png",
-                Profile = profiles.TryGetValue(p.ApplicationUserId, out var profile) ? profile : new Profile()
-                //LikedByDetails = ResolveLikedByDisplay(p.LikedBy),
+                Profile = profiles.TryGetValue(p.ApplicationUserId, out var profile) ? profile : new Profile(),
+                ProfileImageUrl = GetProfileImageUrl(p.ApplicationUserId, profiles),
+                LikedByDisplay = ResolveLikedByDisplay(p.LikedBy)
             }).ToList();
-
-            
 
             var PublicFeedVM = new PublicFeedVM
             {
@@ -98,10 +93,9 @@ namespace Postabl.Controllers
             var postCards = posts.Select(p => new PostCardVM
             {
                 Post = p,
-                ProfileImageUrl = profiles.TryGetValue(p.ApplicationUserId, out var prof) && !string.IsNullOrWhiteSpace(prof.ProfileImageUrl)
-                    ? prof.ProfileImageUrl
-                    : "/images/placeholder-profile.png",
-                Profile = profiles.TryGetValue(p.ApplicationUserId, out var profile) ? profile : new Profile()
+                Profile = profiles.TryGetValue(p.ApplicationUserId, out var profile) ? profile : new Profile(),
+                ProfileImageUrl = GetProfileImageUrl(p.ApplicationUserId, profiles),
+                LikedByDisplay = ResolveLikedByDisplay(p.LikedBy)
             }).ToList();
 
             var vm = new PublicFeedVM
@@ -142,12 +136,11 @@ namespace Postabl.Controllers
             return View(new ErrorViewModel { RequestId = Activity.Current?.Id ?? HttpContext.TraceIdentifier });
         }
 
-        private (List<string> Names, string Summary) ResolveLikedByDisplay(string? likedByJson)
+        private string ResolveLikedByDisplay(string? likedByJson)
         {
-            var names = new List<string>();
             if (string.IsNullOrWhiteSpace(likedByJson))
             {
-                return (names, string.Empty);
+                return string.Empty;
             }
 
             List<string> ids;
@@ -157,43 +150,53 @@ namespace Postabl.Controllers
             }
             catch
             {
-                // malformed JSON: return empty results rather than throwing
-                return (names, string.Empty);
+                return string.Empty;
             }
 
-            if (ids.Count == 0) return (names, string.Empty);
+            if (ids.Count == 0) return string.Empty;
 
             // Batch-fetch profiles and application users to avoid N+1 queries
-            // IRepository.GetAll() used synchronously in this codebase
             var profileList = _unitOfWork.Profile.GetAll().Where(p => p != null && ids.Contains(p.ApplicationUserId)).ToList();
             var profilesByUserId = profileList.ToDictionary(p => p.ApplicationUserId, p => p);
 
             var appUserList = _unitOfWork.ApplicationUser.GetAll().Where(u => u != null && ids.Contains(u.Id)).ToList();
             var appUsersById = appUserList.ToDictionary(u => u.Id, u => u);
 
+            var names = new List<string>();
             foreach (var uid in ids)
             {
                 if (profilesByUserId.TryGetValue(uid, out var prof) && !string.IsNullOrWhiteSpace(prof.DisplayName))
                 {
                     names.Add(prof.DisplayName!);
-                    continue;
                 }
-
-                if (appUsersById.TryGetValue(uid, out var au) && !string.IsNullOrWhiteSpace(au.Name))
+                else if (appUsersById.TryGetValue(uid, out var au) && !string.IsNullOrWhiteSpace(au.Name))
                 {
                     names.Add(au.Name);
-                    continue;
                 }
-
-                names.Add("Unknown");
+                else
+                {
+                    names.Add("Someone");
+                }
             }
 
-            string summary;
-            if (names.Count == 0) summary = string.Empty;
-            else if (names.Count <= 3) summary = string.Join(", ", names);
-            else summary = $"{names[0]}, {names[1]} and {names.Count - 2} others";
+            // Format: "Alice", "Alice and Bob", "Alice, Bob and 3 others"
+            if (names.Count == 0) return string.Empty;
+            if (names.Count == 1) return names[0];
+            if (names.Count == 2) return $"{names[0]} and {names[1]}";
+            if (names.Count <= 3) return string.Join(", ", names.Take(names.Count - 1)) + $" and {names.Last()}";
+            return $"{names[0]}, {names[1]} and {names.Count - 2} others";
+        }
 
-            return (names, summary);
+        private string GetProfileImageUrl(string userId, Dictionary<string, Profile> profiles)
+        {
+            if (profiles.TryGetValue(userId, out var profile) && !string.IsNullOrWhiteSpace(profile.ProfileImageUrl))
+            {
+                return profile.ProfileImageUrl;
+            }
+
+            // Generate avatar using display name or user name
+            var displayName = profile?.DisplayName ?? profile?.ApplicationUser?.Name ?? "User";
+            return $"https://ui-avatars.com/api/?name={Uri.EscapeDataString(displayName)}&background=random&color=fff&size=128";
         }
     }
 }

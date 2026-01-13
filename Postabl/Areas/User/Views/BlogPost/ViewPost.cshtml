@@ -3,7 +3,6 @@
 @{
     ViewData["Title"] = "Post";
 }
-@* Added this using to check if user is logged in for likes *@
 @using System.Net
 
 <div class="post-container">
@@ -33,31 +32,40 @@
             </div>
 
             <div class="post-actions">
-                @if (User?.Identity?.IsAuthenticated ?? false)
-                {
-                    <form asp-area="User" asp-controller="BlogPost" asp-action="Like" method="post" class="d-inline">
-                        @Html.AntiForgeryToken()
-                        <input type="hidden" name="id" value="@Model?.Id" />
-                        <button type="submit" class="btn btn-sm btn-outline-secondary" title="Like" aria-label="Like post">
-                            <span class="me-1">❤️</span> @Model?.Likes
-                        </button>
-                    </form>
-                }
-                else
-                {
-                    var returnUrl = (Context.Request.Path + Context.Request.QueryString).ToString();
-                    <a class="btn btn-sm btn-outline-secondary" title="Sign in to like"
-                       href="@( $"/Identity/Account/Login?returnUrl={WebUtility.UrlEncode(returnUrl)}" )">
-                        <span class="me-1">❤️</span> @Model?.Likes
-                    </a>
+                <div class="d-flex flex-column gap-2">
+                    <div class="d-flex gap-2 align-items-center">
+                        @if (User?.Identity?.IsAuthenticated ?? false)
+                        {
+                            <form asp-area="User" asp-controller="BlogPost" asp-action="Like" method="post" class="d-inline">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="id" value="@Model?.Id" />
+                                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Like" aria-label="Like post">
+                                    <span class="me-1">❤️</span> @Model?.Likes
+                                </button>
+                            </form>
+                        }
+                        else
+                        {
+                            var returnUrl = (Context.Request.Path + Context.Request.QueryString).ToString();
+                            <a class="btn btn-sm btn-outline-secondary" title="Sign in to like"
+                               href="@( $"/Identity/Account/Login?returnUrl={WebUtility.UrlEncode(returnUrl)}" )">
+                                <span class="me-1">❤️</span> @Model?.Likes
+                            </a>
 
-                    <a class="btn btn-sm btn-outline-secondary" title="Register"
-                       href="@( $"/Identity/Account/Register?returnUrl={WebUtility.UrlEncode(returnUrl)}" )">
-                        Register
-                    </a>
-                }
+                            <a class="btn btn-sm btn-outline-secondary" title="Register"
+                               href="@( $"/Identity/Account/Register?returnUrl={WebUtility.UrlEncode(returnUrl)}" )">
+                                Register
+                            </a>
+                        }
 
-                <a asp-area="" asp-controller="Home" asp-action="Index" class="btn btn-sm btn-light">Back to feed</a>
+                        <a asp-area="" asp-controller="Home" asp-action="Index" class="btn btn-sm btn-light">Back to feed</a>
+                    </div>
+                    
+                    @if (!string.IsNullOrWhiteSpace(Model?.LikedByDisplay))
+                    {
+                        <small class="text-muted">Liked by @Model.LikedByDisplay</small>
+                    }
+                </div>
             </div>
         </div>
     </article>

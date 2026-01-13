@@ -3,7 +3,6 @@
 @{
     ViewData["Title"] = "Feed";
 }
-@* Added this using for checking if user is logged in for likes *@
 @using System.Net
 
 <h1 class="mb-4">Public Feed</h1>
@@ -57,17 +56,11 @@
                                         @Html.AntiForgeryToken()
                                         <input type="hidden" name="id" value="@item.Post.Id" />
                                         <button type="submit" class="btn btn-sm btn-outline-secondary" title="Like">❤️ @item.Post.Likes</button>
-                                        @if(item.Post.Likes > 0)
-                                        {
-                                            <small class="text-muted">@item.Post.LikedBy Likes this!</small>
-                                        }
-                                        
-                                        @* <p class="text-muted">Liked by @Html.Raw(System.Net.WebUtility.HtmlEncode((string)ViewBag.LikedByDisplay))</p> *@
-                                        @* @if (!string.IsNullOrWhiteSpace(item.LikedByDisplay))
-                                        {
-                                            <p class="text-muted">Liked by @Html.Raw(WebUtility.HtmlEncode(item.LikedByDisplay))</p>
-                                        } *@
                                     </form>
+                                    @if (!string.IsNullOrWhiteSpace(item.LikedByDisplay))
+                                    {
+                                        <small class="text-muted">Liked by @item.LikedByDisplay</small>
+                                    }
                                 }
                                 else
                                 {
@@ -78,7 +71,6 @@
                                     </a>
                                 }
                             </div>
-                            @* TODO Direct to public reading view, NO CRUD *@
                             <a asp-area="User" asp-controller="BlogPost" asp-action="ViewPost" asp-route-id="@item.Post.Id" class="btn btn-sm btn-primary">Read</a>
                         </div>
                     </div>

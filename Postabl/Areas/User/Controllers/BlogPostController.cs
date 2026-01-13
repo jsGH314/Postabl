@@ -50,6 +50,12 @@ namespace Postabl.Areas.User.Controllers
 
             var profile = _unitOfWork.Profile.Get(p => p.ApplicationUserId == blogPost.ApplicationUserId);
 
+            // Generate avatar URL with initials
+            var displayName = profile?.DisplayName ?? profile?.ApplicationUser?.Name ?? blogPost.Author ?? "User";
+            var profileImageUrl = string.IsNullOrWhiteSpace(profile?.ProfileImageUrl)
+                ? $"https://ui-avatars.com/api/?name={Uri.EscapeDataString(displayName)}&background=random&color=fff&size=128"
+                : profile.ProfileImageUrl;
+
             // Map to a view model for reading a post
             var postVM = new PostDetailsVM
             {
@@ -61,13 +67,9 @@ namespace Postabl.Areas.User.Controllers
                 Likes = blogPost.Likes,
                 IsPublic = blogPost.IsPublic,
                 ProfileId = profile?.Id,
-                ProfileImageUrl = profile?.ProfileImageUrl
+                ProfileImageUrl = profileImageUrl,
+                LikedByDisplay = ResolveLikedByDisplay(blogPost.LikedBy)
             };
-
-            // Resolve liked-by ids -> display names and expose to view
-            var likeInfo = ResolveLikedByDisplay(blogPost.LikedBy);
-            ViewBag.LikedByDisplay = likeInfo.Summary;
-            ViewBag.LikedByDisplayNames = likeInfo.Names;
 
             return View(postVM);
         }
@@ -88,6 +90,12 @@ namespace Postabl.Areas.User.Controllers
 
             var profile = _unitOfWork.Profile.Get(p => p.ApplicationUserId == blogPost.ApplicationUserId);
 
+            // Generate avatar URL with initials
+            var displayName = profile?.DisplayName ?? profile?.ApplicationUser?.Name ?? blogPost.Author ?? "User";
+            var profileImageUrl = string.IsNullOrWhiteSpace(profile?.ProfileImageUrl)
+                ? $"https://ui-avatars.com/api/?name={Uri.EscapeDataString(displayName)}&background=random&color=fff&size=128"
+                : profile.ProfileImageUrl;
+
             // Map to a view model for reading a post
             var postVM = new PostDetailsVM
             {
@@ -99,13 +107,9 @@ namespace Postabl.Areas.User.Controllers
                 Likes = blogPost.Likes,
                 IsPublic = blogPost.IsPublic,
                 ProfileId = profile?.Id,
-                ProfileImageUrl = profile?.ProfileImageUrl
+                ProfileImageUrl = profileImageUrl,
+                LikedByDisplay = ResolveLikedByDisplay(blogPost.LikedBy)
             };
-
-            // Resolve liked-by ids -> display names and expose to view
-            var likeInfo = ResolveLikedByDisplay(blogPost.LikedBy);
-            ViewBag.LikedByDisplay = likeInfo.Summary;
-            ViewBag.LikedByDisplayNames = likeInfo.Names;
 
             return View(postVM);
         }
@@ -151,7 +155,6 @@ namespace Postabl.Areas.User.Controllers
                 return NotFound();
             }
 
-            //var blogPost = await _context.BlogPosts.FindAsync(id);
             var blogPost = _unitOfWork.BlogPost.Get(b => b.Id == id);
             if (blogPost == null)
             {
@@ -174,17 +177,10 @@ namespace Postabl.Areas.User.Controllers
 
             if (!ModelState.IsValid)
             {
-                // load full entity to re-render the view (preserve fields not posted)
-                //var reload = await _context.BlogPosts
-                //    .Include(b => b.ApplicationUser)
-                //        .ThenInclude(u => u.Profile)
-                //    .FirstOrDefaultAsync(b => b.Id == id);
                 var reload = _unitOfWork.BlogPost.Get(b => b.Id == id);
                 return View(reload ?? posted);
             }
 
-            // Load existing entity from DB so we only update allowed properties and preserve the FK
-            //var existing = await _context.BlogPosts.FirstOrDefaultAsync(b => b.Id == id);
             var existing = _unitOfWork.BlogPost.Get(b => b.Id == id);
             if (existing == null) return NotFound();
 
@@ -197,7 +193,6 @@ namespace Postabl.Areas.User.Controllers
             {
                 _unitOfWork.BlogPost.Update(existing);
                 _unitOfWork.Save();
-                //await _context.SaveChangesAsync();
             }
             catch (DbUpdateConcurrencyException)
             {
@@ -217,8 +212,6 @@ namespace Postabl.Areas.User.Controllers
                 return NotFound();
             }
 
-            //var blogPost = await _context.BlogPosts
-            //    .FirstOrDefaultAsync(m => m.Id == id);
             var blogPost = _unitOfWork.BlogPost.Get(b => b.Id == id);
             if (blogPost == null)
             {
@@ -233,76 +226,14 @@ namespace Postabl.Areas.User.Controllers
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> DeleteConfirmed(int id)
         {
-            //var blogPost = await _context.BlogPosts.FindAsync(id);
             var blogPost = _unitOfWork.BlogPost.Get(b => b.Id == id);
             if (blogPost != null)
             {
-                //_context.BlogPosts.Remove(blogPost);
                 _unitOfWork.BlogPost.Remove(blogPost);
             }
 
-            //await _context.SaveChangesAsync();
             _unitOfWork.Save();
             return RedirectToAction("Profile", "Profile");
-        }
-
-        /// <summary>
-        /// Convert the JSON stored user-id list into display names (Profile.DisplayName, fallback ApplicationUser.Name).
-        /// Returns a tuple: (full list of names in order, friendly summary string).
-        /// Exposed via ViewBag in actions above.
-        /// </summary>
-        private (List<string> Names, string Summary) ResolveLikedByDisplay(string? likedByJson)
-        {
-            var names = new List<string>();
-            if (string.IsNullOrWhiteSpace(likedByJson))
-            {
-                return (names, string.Empty);
-            }
-
-            List<string> ids;
-            try
-            {
-                ids = JsonSerializer.Deserialize<List<string>>(likedByJson) ?? new List<string>();
-            }
-            catch
-            {
-                // malformed JSON: return empty results rather than throwing
-                return (names, string.Empty);
-            }
-
-            if (ids.Count == 0) return (names, string.Empty);
-
-            // Batch-fetch profiles and application users to avoid N+1 queries
-            // IRepository.GetAll() used synchronously in this codebase
-            var profileList = _unitOfWork.Profile.GetAll().Where(p => p != null && ids.Contains(p.ApplicationUserId)).ToList();
-            var profilesByUserId = profileList.ToDictionary(p => p.ApplicationUserId, p => p);
-
-            var appUserList = _unitOfWork.ApplicationUser.GetAll().Where(u => u != null && ids.Contains(u.Id)).ToList();
-            var appUsersById = appUserList.ToDictionary(u => u.Id, u => u);
-
-            foreach (var uid in ids)
-            {
-                if (profilesByUserId.TryGetValue(uid, out var prof) && !string.IsNullOrWhiteSpace(prof.DisplayName))
-                {
-                    names.Add(prof.DisplayName!);
-                    continue;
-                }
-
-                if (appUsersById.TryGetValue(uid, out var au) && !string.IsNullOrWhiteSpace(au.Name))
-                {
-                    names.Add(au.Name);
-                    continue;
-                }
-
-                names.Add("Unknown");
-            }
-
-            string summary;
-            if (names.Count == 0) summary = string.Empty;
-            else if (names.Count <= 3) summary = string.Join(", ", names);
-            else summary = $"{names[0]}, {names[1]} and {names.Count - 2} others";
-
-            return (names, summary);
         }
 
         // POST: User/BlogPost/Like
@@ -336,7 +267,7 @@ namespace Postabl.Areas.User.Controllers
             {
                 try
                 {
-                    likedBy = System.Text.Json.JsonSerializer.Deserialize<HashSet<string>>(blogPost.LikedBy) ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    likedBy = JsonSerializer.Deserialize<HashSet<string>>(blogPost.LikedBy) ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 }
                 catch
                 {
@@ -358,7 +289,7 @@ namespace Postabl.Areas.User.Controllers
 
             // keep aggregate Likes in sync with the stored list
             blogPost.Likes = likedBy.Count;
-            blogPost.LikedBy = System.Text.Json.JsonSerializer.Serialize(likedBy);
+            blogPost.LikedBy = JsonSerializer.Serialize(likedBy);
 
             _unitOfWork.BlogPost.Update(blogPost);
             _unitOfWork.Save();
@@ -386,20 +317,11 @@ namespace Postabl.Areas.User.Controllers
 
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
             var user = _unitOfWork.ApplicationUser.Get(u => u.Id == userId);
-            //if (string.IsNullOrEmpty(userId))
-            //{
-            //    // redirect to login (preserves return URL)
-            //    var returnUrl = Url.Action("Profile", "Profile", new { area = "User" });
-            //    return Redirect($"/Identity/Account/Login?returnUrl={UrlEncoder.Default.Encode(returnUrl)}");
-            //}
-
-            //var user = await _context.ApplicationUsers.FirstOrDefaultAsync(u => u.Id == userId);
 
             if (user == null)
             {
                 return BadRequest("User not found.");
             }
-
 
             var blogPost = new BlogPost();
 
@@ -417,27 +339,62 @@ namespace Postabl.Areas.User.Controllers
                 return RedirectToAction("Profile", "Profile");
             }
             return RedirectToAction("Profile", "Profile");
-
-
-            //var blogPost = new BlogPost
-            //{
-            //    ApplicationUserId = userId,
-            //    Author = user.Name,
-            //    Content = content,
-            //    Title = "Quick Post",
-            //    PublishedDate = DateTime.Now,
-            //    Likes = 0,
-            //    IsPublic = isPublic
-            //};
-            //_context.Add(blogPost);
-            //await _context.SaveChangesAsync();
-            //return RedirectToAction("Profile", "Profile");
         }
 
         private bool BlogPostExists(int id)
         {
-            //return _context.BlogPosts.Any(e => e.Id == id);
             return _unitOfWork.BlogPost.Get(b => b.Id == id) != null;
+        }
+
+        private string ResolveLikedByDisplay(string? likedByJson)
+        {
+            if (string.IsNullOrWhiteSpace(likedByJson))
+            {
+                return string.Empty;
+            }
+
+            List<string> ids;
+            try
+            {
+                ids = JsonSerializer.Deserialize<List<string>>(likedByJson) ?? new List<string>();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+
+            if (ids.Count == 0) return string.Empty;
+
+            // Batch-fetch profiles and application users to avoid N+1 queries
+            var profileList = _unitOfWork.Profile.GetAll().Where(p => p != null && ids.Contains(p.ApplicationUserId)).ToList();
+            var profilesByUserId = profileList.ToDictionary(p => p.ApplicationUserId, p => p);
+
+            var appUserList = _unitOfWork.ApplicationUser.GetAll().Where(u => u != null && ids.Contains(u.Id)).ToList();
+            var appUsersById = appUserList.ToDictionary(u => u.Id, u => u);
+
+            var names = new List<string>();
+            foreach (var uid in ids)
+            {
+                if (profilesByUserId.TryGetValue(uid, out var prof) && !string.IsNullOrWhiteSpace(prof.DisplayName))
+                {
+                    names.Add(prof.DisplayName!);
+                }
+                else if (appUsersById.TryGetValue(uid, out var au) && !string.IsNullOrWhiteSpace(au.Name))
+                {
+                    names.Add(au.Name);
+                }
+                else
+                {
+                    names.Add("Someone");
+                }
+            }
+
+            // Format: "Alice", "Alice and Bob", "Alice, Bob and 3 others"
+            if (names.Count == 0) return string.Empty;
+            if (names.Count == 1) return names[0];
+            if (names.Count == 2) return $"{names[0]} and {names[1]}";
+            if (names.Count <= 3) return string.Join(", ", names.Take(names.Count - 1)) + $" and {names.Last()}";
+            return $"{names[0]}, {names[1]} and {names.Count - 2} others";
         }
     }
 }

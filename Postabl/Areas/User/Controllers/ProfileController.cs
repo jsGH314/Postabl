@@ -11,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Utility;
 
@@ -20,7 +21,6 @@ namespace Postabl.Areas.User.Controllers
     [Authorize(Roles = SD.Role_User)]
     public class ProfileController : Controller
     {
-        //private readonly ApplicationDbContext _context;
         private readonly IUnitOfWork _unitOfWork;
         private readonly ApplicationDbContext _context;
         private readonly IWebHostEnvironment _env;
@@ -31,34 +31,11 @@ namespace Postabl.Areas.User.Controllers
             _context = context;
             _env = env;
         }
-        //public ProfileController(ApplicationDbContext context)
-        //{
-        //    _context = context;
-        //}
-        //This will be the main dashboard for users to see their profile, blog posts, and other relevant information.
-        [Authorize]
-        //Views all of the current logged in users posts
-        public  IActionResult Dashboard()
-        {
-            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            if (User.IsInRole(SD.Role_User))
-            {
-                IEnumerable<BlogPost> blogPostList = _unitOfWork.BlogPost.GetAll(u => u.ApplicationUserId == userId);
-                
-                //UserProfileVM userVM = new()
-                //{
-                //    BlogPostList = blogPostList,
-                //};
-                return View(blogPostList);
-            }
-            return View();
-        }
 
         // GET: User/Profile
         public async Task<IActionResult> Index()
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            //return View(_context.Profiles.FirstOrDefault(x => x.ApplicationUserId == userId));
             return View(_unitOfWork.Profile.Get(p => p.ApplicationUserId == userId));
         }
 
@@ -66,23 +43,26 @@ namespace Postabl.Areas.User.Controllers
         {
             var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
 
+            var blogPostList = _unitOfWork.BlogPost.GetAll(b => b.ApplicationUserId == userId)
+                .OrderByDescending(b => b.PublishedDate)
+                .ToList();
+
+            var likedByDisplayMap = new Dictionary<int, string>();
+            foreach (var post in blogPostList)
+            {
+                likedByDisplayMap[post.Id] = ResolveLikedByDisplay(post.LikedBy);
+            }
+
             UserProfileVM profileVM = new UserProfileVM()
             {
-                //User = await _context.ApplicationUsers.FirstOrDefaultAsync(u => u.Id == userId),
                 User = _unitOfWork.ApplicationUser.Get(u => u.Id == userId),
-                //Profile = await _context.Profiles.FirstOrDefaultAsync(p => p.ApplicationUserId == userId),
                 Profile = _unitOfWork.Profile.Get(p => p.ApplicationUserId == userId),
-                //BlogPostList = await _context.BlogPosts.Where(b => b.ApplicationUserId == userId).ToListAsync()
-                //BlogPostList = await _context.BlogPosts
-                    //.Where(b => b.ApplicationUserId == userId)
-                    //.OrderByDescending(b => b.PublishedDate)
-                    //.ToListAsync(),
-                BlogPostList = _unitOfWork.BlogPost.GetAll(b => b.ApplicationUserId == userId).OrderByDescending(b => b.PublishedDate)
+                BlogPostList = blogPostList,
+                LikedByDisplayMap = likedByDisplayMap
             };
 
             return View(profileVM);
         }
-
 
         // Added this section to allow viewing another user's public profile by user id (public view)
         [AllowAnonymous]
@@ -91,23 +71,24 @@ namespace Postabl.Areas.User.Controllers
         {
             if (string.IsNullOrWhiteSpace(id)) return NotFound();
 
-            //var user = await _context.ApplicationUsers.FirstOrDefaultAsync(u => u.Id == id);
             var user = _unitOfWork.ApplicationUser.Get(u => u.Id == id);
-            //var profile = await _context.Profiles.FirstOrDefaultAsync(p => p.ApplicationUserId == id);
             var profile = _unitOfWork.Profile.Get(p => p.ApplicationUserId == id);
-            //var posts = await _context.BlogPosts
-            //    .Where(b => b.ApplicationUserId == id && b.IsPublic)
-            //    .OrderByDescending(b => b.PublishedDate)
-            //    .ToListAsync();
             var posts = _unitOfWork.BlogPost.GetAll(b => b.ApplicationUserId == id && b.IsPublic)
                 .OrderByDescending(b => b.PublishedDate)
                 .ToList();
+
+            var likedByDisplayMap = new Dictionary<int, string>();
+            foreach (var post in posts)
+            {
+                likedByDisplayMap[post.Id] = ResolveLikedByDisplay(post.LikedBy);
+            }
 
             var profileVM = new UserProfileVM
             {
                 User = user ?? new ApplicationUser(),
                 Profile = profile ?? new Profile(),
-                BlogPostList = posts
+                BlogPostList = posts,
+                LikedByDisplayMap = likedByDisplayMap
             };
 
             // Reuse the existing Profile view
@@ -115,90 +96,44 @@ namespace Postabl.Areas.User.Controllers
         }
 
         [AllowAnonymous]
-        [HttpGet] // friendly absolute route, e.g. /u/123
+        [HttpGet]
         public async Task<IActionResult> ViewPublicProfile(int id)
         {
-            // load profile including the related ApplicationUser (if present)
-
-            //var profile = await _context.Profiles
-            //    .Include(p => p.ApplicationUser)
-            //    .FirstOrDefaultAsync(p => p.Id == id);
-
             var profile = _unitOfWork.Profile.Get(p => p.Id == id);
 
             if (profile == null) return NotFound();
 
             var userId = profile.ApplicationUserId;
 
-            //var posts = await _context.BlogPosts
-            //    .Where(b => b.ApplicationUserId == userId && b.IsPublic)
-            //    .OrderByDescending(b => b.PublishedDate)
-            //    .ToListAsync();
             var posts = _unitOfWork.BlogPost.GetAll(b => b.ApplicationUserId == userId && b.IsPublic)
                 .OrderByDescending(b => b.PublishedDate)
                 .ToList();
+
+            var likedByDisplayMap = new Dictionary<int, string>();
+            foreach (var post in posts)
+            {
+                likedByDisplayMap[post.Id] = ResolveLikedByDisplay(post.LikedBy);
+            }
 
             var profileVm = new UserProfileVM
             {
                 User = profile.ApplicationUser ?? new ApplicationUser(),
                 Profile = profile,
-                BlogPostList = posts
+                BlogPostList = posts,
+                LikedByDisplayMap = likedByDisplayMap
             };
 
             return View("ViewPublicProfile", profileVm);
         }
-
-
-
-        // GET: User/Profile/Details/5
-        //public async Task<IActionResult> Details(int? id)
-        //{
-        //    if (id == null)
-        //    {
-        //        return NotFound();
-        //    }
-
-        //    var profile = await _context.Profiles
-        //        .FirstOrDefaultAsync(m => m.Id == id);
-        //    if (profile == null)
-        //    {
-        //        return NotFound();
-        //    }
-
-        //    return View(profile);
-        //}
-
-        // GET: User/Profile/Create
-        //public IActionResult Create()
-        //{
-        //    return View();
-        //}
-
-        // POST: User/Profile/Create
-        // To protect from overposting attacks, enable the specific properties you want to bind to.
-        // For more details, see http://go.microsoft.com/fwlink/?LinkId=317598.
-        //[HttpPost]
-        //[ValidateAntiForgeryToken]
-        //public async Task<IActionResult> Create([Bind("Id,Bio,DisplayName,UserId")] Profile profile)
-        //{
-        //    if (ModelState.IsValid)
-        //    {
-        //        _context.Add(profile);
-        //        await _context.SaveChangesAsync();
-        //        return RedirectToAction(nameof(Index));
-        //    }
-        //    return View(profile);
-        //}
 
         // GET: User/Profile/Edit/5
         public async Task<IActionResult> Edit(int? id)
         {
             if (id == null)
             {
-               return NotFound();
+                return NotFound();
             }
 
-            //var profile = await _context.Profiles.FindAsync(id);
             var profile = _unitOfWork.Profile.Get(p => p.Id == id);
             if (profile == null)
             {
@@ -210,7 +145,7 @@ namespace Postabl.Areas.User.Controllers
         // POST: User/Profile/Edit/5
         [HttpPost]
         [ValidateAntiForgeryToken]
-        public async Task<IActionResult> Edit(int id, [Bind("Id,Bio,DisplayName")] Profile profile /*IFormFile ProfileImage, IFormFile CoverImage*/)
+        public async Task<IActionResult> Edit(int id, [Bind("Id,Bio,DisplayName")] Profile profile)
         {
             if (id != profile.Id)
             {
@@ -222,8 +157,6 @@ namespace Postabl.Areas.User.Controllers
                 return View(profile);
             }
 
-            // Load existing entity to preserve FK and any other fields not in the bind list
-            //var existing = await _context.Profiles.FirstOrDefaultAsync(p => p.Id == id);
             var existing = _unitOfWork.Profile.Get(p => p.Id == id);
             if (existing == null) return NotFound();
 
@@ -233,14 +166,11 @@ namespace Postabl.Areas.User.Controllers
 
             try
             {
-                //_context.Profiles.Update(existing);
                 _unitOfWork.Profile.Update(existing);
-                //await _context.SaveChangesAsync();
                 _unitOfWork.Save();
             }
             catch (DbUpdateConcurrencyException)
             {
-                //if (!_context.Profiles.Any(e => e.Id == id)) return NotFound();
                 if (_unitOfWork.Profile.Get(p => p.Id == id) == null) return NotFound();
                 throw;
             }
@@ -249,125 +179,127 @@ namespace Postabl.Areas.User.Controllers
             return RedirectToAction(nameof(Profile));
         }
 
-        public string ImageUpload(IFormFile image)
-        {
-            if (image != null && image.Length > 0)
-            {
-                // Handle file upload logic here
-                var filePath = Path.Combine(_env.WebRootPath, "uploads", "profiles", image.FileName);
-
-                using (var stream = new FileStream(filePath, FileMode.Create))
-                {
-                    image.CopyToAsync(stream);
-                }
-                //returns the relative path to be saved in the database
-                return $"/uploads/profiles/{image.FileName}";
-            }
-            return null;
-        }
-
-        // GET: User/Profile/Delete/5
-        //public async Task<IActionResult> Delete(int? id)
-        //{
-        //    if (id == null)
-        //    {
-        //        return NotFound();
-        //    }
-
-        //    var profile = await _context.Profiles
-        //        .FirstOrDefaultAsync(m => m.Id == id);
-        //    if (profile == null)
-        //    {
-        //        return NotFound();
-        //    }
-
-        //    return View(profile);
-        //}
-
-        // POST: User/Profile/Delete/5
-        //    [HttpPost, ActionName("Delete")]
-        //    [ValidateAntiForgeryToken]
-        //    public async Task<IActionResult> DeleteConfirmed(int id)
-        //    {
-        //        var profile = await _context.Profiles.FindAsync(id);
-        //        if (profile != null)
-        //        {
-        //            _context.Profiles.Remove(profile);
-        //        }
-
-        //        await _context.SaveChangesAsync();
-        //        return RedirectToAction(nameof(Index));
-        //    }
-
-        //    private bool ProfileExists(int id)
-        //    {
-        //        return _context.Profiles.Any(e => e.Id == id);
-        //    }
-
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> UploadProfileImage(int id, IFormFile file)
         {
-            if (file == null || file.Length == 0) return BadRequest(new { success = false, error = "No file uploaded" });
-
-            //var profile = await _context.Profiles.FirstOrDefaultAsync(p => p.Id == id);
-            var profile = _unitOfWork.Profile.Get(p => p.Id == id);
-
-            if (profile == null) return NotFound(new { success = false, error = "Profile not found" });
-
-            var uploads = System.IO.Path.Combine(_env.WebRootPath, "uploads", "profiles");
-            System.IO.Directory.CreateDirectory(uploads);
-
-            var ext = System.IO.Path.GetExtension(file.FileName);
-            var fileName = $"{Guid.NewGuid()}{ext}";
-            var filePath = System.IO.Path.Combine(uploads, fileName);
-
-            using (var stream = new System.IO.FileStream(filePath, System.IO.FileMode.Create))
-            {
-                await file.CopyToAsync(stream);
-            }
-
-            // update DB with cache-busting query so browser fetches new image
-            profile.ProfileImageUrl = $"/uploads/profiles/{fileName}?v={DateTime.UtcNow.Ticks}";
-
-            //_context.Profiles.Update(profile);
-            _unitOfWork.Profile.Update(profile);
-            //await _context.SaveChangesAsync();
-            _unitOfWork.Save();
-
-            return Json(new { success = true, url = profile.ProfileImageUrl });
+            return await UploadImage(id, file, ImageType.Profile);
         }
 
         [HttpPost]
         [ValidateAntiForgeryToken]
         public async Task<IActionResult> UploadCoverImage(int id, IFormFile file)
         {
-            if (file == null || file.Length == 0) return BadRequest(new { success = false, error = "No file uploaded" });
+            return await UploadImage(id, file, ImageType.Cover);
+        }
 
-            //var profile = await _context.Profiles.FirstOrDefaultAsync(p => p.Id == id);
-            var profile = _unitOfWork.Profile.Get(p => p.Id == id); 
-            if (profile == null) return NotFound(new { success = false, error = "Profile not found" });
+        #region Private Helper Methods
 
-            var uploads = System.IO.Path.Combine(_env.WebRootPath, "uploads", "profiles");
-            System.IO.Directory.CreateDirectory(uploads);
+        private enum ImageType
+        {
+            Profile,
+            Cover
+        }
 
-            var ext = System.IO.Path.GetExtension(file.FileName);
-            var fileName = $"{Guid.NewGuid()}{ext}";
-            var filePath = System.IO.Path.Combine(uploads, fileName);
+        private async Task<IActionResult> UploadImage(int profileId, IFormFile file, ImageType imageType)
+        {
+            if (file == null || file.Length == 0)
+            {
+                return BadRequest(new { success = false, error = "No file uploaded" });
+            }
 
-            using (var stream = new System.IO.FileStream(filePath, System.IO.FileMode.Create))
+            var profile = _unitOfWork.Profile.Get(p => p.Id == profileId);
+            if (profile == null)
+            {
+                return NotFound(new { success = false, error = "Profile not found" });
+            }
+
+            // Create uploads directory if it doesn't exist
+            var uploadsDir = Path.Combine(_env.WebRootPath, "uploads", "profiles");
+            Directory.CreateDirectory(uploadsDir);
+
+            // Generate unique filename with original extension
+            var extension = Path.GetExtension(file.FileName);
+            var fileName = $"{Guid.NewGuid()}{extension}";
+            var filePath = Path.Combine(uploadsDir, fileName);
+
+            // Save file to disk
+            using (var stream = new FileStream(filePath, FileMode.Create))
             {
                 await file.CopyToAsync(stream);
             }
 
-            profile.CoverImageUrl = $"/uploads/profiles/{fileName}?v={DateTime.UtcNow.Ticks}";
+            // Generate URL with cache-busting query parameter
+            var imageUrl = $"/uploads/profiles/{fileName}?v={DateTime.UtcNow.Ticks}";
 
-            //_context.Profiles.Update(profile);
+            // Update the appropriate property based on image type
+            switch (imageType)
+            {
+                case ImageType.Profile:
+                    profile.ProfileImageUrl = imageUrl;
+                    break;
+                case ImageType.Cover:
+                    profile.CoverImageUrl = imageUrl;
+                    break;
+            }
+
             _unitOfWork.Profile.Update(profile);
-            //await _context.SaveChangesAsync();
             _unitOfWork.Save();
 
-            return Json(new { success = true, url = profile.CoverImageUrl });
+            return Json(new { success = true, url = imageUrl });
         }
+
+        private string ResolveLikedByDisplay(string? likedByJson)
+        {
+            if (string.IsNullOrWhiteSpace(likedByJson))
+            {
+                return string.Empty;
+            }
+
+            List<string> ids;
+            try
+            {
+                ids = JsonSerializer.Deserialize<List<string>>(likedByJson) ?? new List<string>();
+            }
+            catch
+            {
+                return string.Empty;
+            }
+
+            if (ids.Count == 0) return string.Empty;
+
+            // Batch-fetch profiles and application users to avoid N+1 queries
+            var profileList = _unitOfWork.Profile.GetAll().Where(p => p != null && ids.Contains(p.ApplicationUserId)).ToList();
+            var profilesByUserId = profileList.ToDictionary(p => p.ApplicationUserId, p => p);
+
+            var appUserList = _unitOfWork.ApplicationUser.GetAll().Where(u => u != null && ids.Contains(u.Id)).ToList();
+            var appUsersById = appUserList.ToDictionary(u => u.Id, u => u);
+
+            var names = new List<string>();
+            foreach (var uid in ids)
+            {
+                if (profilesByUserId.TryGetValue(uid, out var prof) && !string.IsNullOrWhiteSpace(prof.DisplayName))
+                {
+                    names.Add(prof.DisplayName!);
+                }
+                else if (appUsersById.TryGetValue(uid, out var au) && !string.IsNullOrWhiteSpace(au.Name))
+                {
+                    names.Add(au.Name);
+                }
+                else
+                {
+                    names.Add("Someone");
+                }
+            }
+
+            // Format: "Alice", "Alice and Bob", "Alice, Bob and 3 others"
+            if (names.Count == 0) return string.Empty;
+            if (names.Count == 1) return names[0];
+            if (names.Count == 2) return $"{names[0]} and {names[1]}";
+            if (names.Count <= 3) return string.Join(", ", names.Take(names.Count - 1)) + $" and {names.Last()}";
+            return $"{names[0]}, {names[1]} and {names.Count - 2} others";
+        }
+
+        #endregion
     }
 }

@@ -2,8 +2,16 @@
 
 @{
     ViewData["Title"] = "Profile";
-    string photoUrl = string.IsNullOrWhiteSpace(Model?.Profile?.ProfileImageUrl) ? "/images/placeholder-profile.png" : Model.Profile.ProfileImageUrl;
-    string coverUrl = string.IsNullOrWhiteSpace(Model?.Profile?.CoverImageUrl) ? "/images/placeholder-cover.jpg" : Model.Profile.CoverImageUrl;
+    
+    // Check if profile has uploaded images, otherwise use placeholders
+    var displayName = Model?.Profile?.DisplayName ?? Model?.Profile?.ApplicationUser?.Name ?? "User";
+    string photoUrl = string.IsNullOrWhiteSpace(Model?.Profile?.ProfileImageUrl) 
+        ? $"https://ui-avatars.com/api/?name={Uri.EscapeDataString(displayName)}&background=random&color=fff&size=256" 
+        : Model.Profile.ProfileImageUrl;
+        
+    string coverUrl = string.IsNullOrWhiteSpace(Model?.Profile?.CoverImageUrl) 
+        ? "/images/placeholder-cover.jpg" 
+        : Model.Profile.CoverImageUrl;
 }
 
 <!-- Page header / cover -->
@@ -26,11 +34,8 @@
 
             <div class="collapse mt-3" id="profileCollapse">
                 <div class="card">
-                     <div class="card-body">
+                    <div class="card-body">
                         <p class="mb-2">@Html.DisplayFor(m => m.Profile.Bio)</p>
-@*                         <div class="d-flex gap-2">
-                            <a asp-action="Edit" asp-route-id="@Model?.Profile?.Id" class="btn btn-primary btn-sm">Edit Profile</a>
-                        </div> *@
                     </div> 
                 </div>
             </div>
@@ -49,19 +54,6 @@
                             <div class="h5 mb-0">@Model?.BlogPostList?.Count()</div>
                             <small class="text-muted">Posts</small>
                         </div>
-                        @*                         <div class="text-center">
-                            <div class="h5 mb-0">@Model?.Profile?.FollowersCount ?? 0</div>
-                            <small class="text-muted">Followers</small>
-                        </div> *@
-                    </div>
-
-@*                     <div class="d-grid">
-                        <a asp-area="User" asp-controller="Profile" asp-action="Edit" asp-route-id="@Model?.Profile?.Id" class="btn btn-primary">Edit Profile</a>
-                    </div> *@
-
-                    @* Preserve original Back link (commented out) *@
-                    <div class="mt-2">
-                        @* <a asp-action="Index">Back to List</a> *@
                     </div>
                 </div>
             </div>
@@ -72,32 +64,11 @@
             <div class="d-flex align-items-center justify-content-between mb-3">
                 <h3 class="mb-0">Posts</h3>
                 <small class="text-muted">@Model?.BlogPostList?.Count() posts</small>
-                @* <a asp-area="User" asp-controller="BlogPost" asp-action="Create" class="btn btn-sm btn-primary">New Post</a> *@
             </div>
-
-
-            <!-- TODO Quick post form -->
-            @*             <div class="card mb-3">
-                <div class="card-body">
-                    <form asp-area="User" asp-controller="BlogPost" asp-action="QuickPost" method="post" class="row g-2">
-                        @Html.AntiForgeryToken()
-                        <div class="col-12">
-                            <textarea name="content" class="form-control form-control-lg" rows="5" placeholder="Share something..."></textarea>
-                        </div>
-                        <div class="col-12 d-flex justify-content-end">
-                            <button type="submit" class="btn btn-primary">Post</button>
-                        </div>
-                    </form>
-                </div>
-            </div> *@
 
             @if (Model.BlogPostList != null && Model.BlogPostList.Any())
             {
-
                 <div class="row g-3">
-@*                     <div class="d-grid">
-                        <a asp-area="User" asp-controller="BlogPost" asp-action="Create" class="btn btn-sm btn-primary">New Post</a>
-                    </div> *@
                     @foreach (var post in Model.BlogPostList)
                     {
                         <div class="col-12 col-sm-6">
@@ -108,14 +79,19 @@
                                         <small class="text-muted">@post.PublishedDate.ToString("yyyy-MM-dd")</small>
                                     </div>
                                     <p class="card-text flex-grow-1">@((post.Content?.Length > 200) ? post.Content.Substring(0, 200) + "…" : post.Content)</p>
-                                    <div class="d-flex justify-content-between align-items-center mt-3">
-                                        @* <small class="text-muted">Likes: @post.Likes</small> *@
-                                        <form asp-area="User" asp-controller="BlogPost" asp-action="Like" method="post" class="d-inline">
-                                            @Html.AntiForgeryToken()
-                                            <input type="hidden" name="id" value="@post.Id" />
-                                            <button type="submit" class="btn btn-sm btn-outline-secondary" title="Like">❤️ @post.Likes</button>
-                                        </form>
-                                        <a class="btn btn-sm btn-outline-primary" asp-controller="BlogPost" asp-action="Details" asp-route-id="@post.Id">Read</a>
+                                    <div class="d-flex flex-column gap-2 mt-3">
+                                        <div class="d-flex justify-content-between align-items-center">
+                                            <form asp-area="User" asp-controller="BlogPost" asp-action="Like" method="post" class="d-inline">
+                                                @Html.AntiForgeryToken()
+                                                <input type="hidden" name="id" value="@post.Id" />
+                                                <button type="submit" class="btn btn-sm btn-outline-secondary" title="Like">❤️ @post.Likes</button>
+                                            </form>
+                                            <a class="btn btn-sm btn-outline-primary" asp-controller="BlogPost" asp-action="Details" asp-route-id="@post.Id">Read</a>
+                                        </div>
+                                        @if (Model.LikedByDisplayMap.TryGetValue(post.Id, out var likedByDisplay) && !string.IsNullOrWhiteSpace(likedByDisplay))
+                                        {
+                                            <small class="text-muted">Liked by @likedByDisplay</small>
+                                        }
                                     </div>
                                 </div>
                             </div>

@@ -56,11 +56,11 @@
                                         @Html.AntiForgeryToken()
                                         <input type="hidden" name="id" value="@item.Post.Id" />
                                         <button type="submit" class="btn btn-sm btn-outline-secondary" title="Like">❤️ @item.Post.Likes</button>
-                                        @if(item.Post.Likes > 0)
-                                        {
-                                            <small class="text-muted">@item.Post.LikedBy Likes this!</small>
-                                        }
                                     </form>
+                                    @if (!string.IsNullOrWhiteSpace(item.LikedByDisplay))
+                                    {
+                                        <small class="text-muted">Liked by @item.LikedByDisplay</small>
+                                    }
                                 }
                                 else
                                 {
