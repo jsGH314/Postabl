@@ -13,6 +13,7 @@ namespace Models.ViewModels
         public DateTime PublishedDate { get; set; }
         public int Likes { get; set; }
         public bool IsPublic { get; set; }
+        public bool IsAuthor { get; set; } = false;
 
         // Profile info for avatar + link
         public int? ProfileId { get; set; }

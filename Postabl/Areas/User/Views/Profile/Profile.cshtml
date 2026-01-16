@@ -137,7 +137,7 @@
                                                 <input type="hidden" name="id" value="@post.Id" />
                                                 <button type="submit" class="btn btn-sm btn-outline-secondary" title="Like">❤️ @post.Likes</button>
                                             </form>
-                                            <a class="btn btn-sm btn-outline-primary" asp-controller="BlogPost" asp-action="Details" asp-route-id="@post.Id">Read</a>
+                                            <a class="btn btn-sm btn-outline-primary" asp-controller="BlogPost" asp-action="ViewPost" asp-route-id="@post.Id">Read</a>
                                         </div>
                                         @if (Model.LikedByDisplayMap.TryGetValue(post.Id, out var likedByDisplay) && !string.IsNullOrWhiteSpace(likedByDisplay))
                                         {

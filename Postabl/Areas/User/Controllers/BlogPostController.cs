@@ -56,6 +56,8 @@ namespace Postabl.Areas.User.Controllers
                 ? $"https://ui-avatars.com/api/?name={Uri.EscapeDataString(displayName)}&background=random&color=fff&size=128"
                 : profile.ProfileImageUrl;
 
+            var isAuthor = blogPost.ApplicationUserId == User.FindFirstValue(ClaimTypes.NameIdentifier);
+
             // Map to a view model for reading a post
             var postVM = new PostDetailsVM
             {
@@ -66,6 +68,7 @@ namespace Postabl.Areas.User.Controllers
                 PublishedDate = blogPost.PublishedDate,
                 Likes = blogPost.Likes,
                 IsPublic = blogPost.IsPublic,
+                IsAuthor = isAuthor,
                 ProfileId = profile?.Id,
                 ProfileImageUrl = profileImageUrl,
                 LikedByDisplay = ResolveLikedByDisplay(blogPost.LikedBy)
@@ -75,44 +78,44 @@ namespace Postabl.Areas.User.Controllers
         }
 
         // GET: User/BlogPost/Details/5
-        public async Task<IActionResult> Details(int? id)
-        {
-            if (id == null)
-            {
-                return NotFound();
-            }
+        //public async Task<IActionResult> Details(int? id)
+        //{
+        //    if (id == null)
+        //    {
+        //        return NotFound();
+        //    }
 
-            var blogPost = _unitOfWork.BlogPost.Get(b => b.Id == id);
-            if (blogPost == null)
-            {
-                return NotFound();
-            }
+        //    var blogPost = _unitOfWork.BlogPost.Get(b => b.Id == id);
+        //    if (blogPost == null)
+        //    {
+        //        return NotFound();
+        //    }
 
-            var profile = _unitOfWork.Profile.Get(p => p.ApplicationUserId == blogPost.ApplicationUserId);
+        //    var profile = _unitOfWork.Profile.Get(p => p.ApplicationUserId == blogPost.ApplicationUserId);
 
-            // Generate avatar URL with initials
-            var displayName = profile?.DisplayName ?? profile?.ApplicationUser?.Name ?? blogPost.Author ?? "User";
-            var profileImageUrl = string.IsNullOrWhiteSpace(profile?.ProfileImageUrl)
-                ? $"https://ui-avatars.com/api/?name={Uri.EscapeDataString(displayName)}&background=random&color=fff&size=128"
-                : profile.ProfileImageUrl;
+        //    // Generate avatar URL with initials
+        //    var displayName = profile?.DisplayName ?? profile?.ApplicationUser?.Name ?? blogPost.Author ?? "User";
+        //    var profileImageUrl = string.IsNullOrWhiteSpace(profile?.ProfileImageUrl)
+        //        ? $"https://ui-avatars.com/api/?name={Uri.EscapeDataString(displayName)}&background=random&color=fff&size=128"
+        //        : profile.ProfileImageUrl;
 
-            // Map to a view model for reading a post
-            var postVM = new PostDetailsVM
-            {
-                Id = blogPost.Id,
-                Title = blogPost.Title,
-                Content = blogPost.Content,
-                Author = blogPost.Author,
-                PublishedDate = blogPost.PublishedDate,
-                Likes = blogPost.Likes,
-                IsPublic = blogPost.IsPublic,
-                ProfileId = profile?.Id,
-                ProfileImageUrl = profileImageUrl,
-                LikedByDisplay = ResolveLikedByDisplay(blogPost.LikedBy)
-            };
+        //    // Map to a view model for reading a post
+        //    var postVM = new PostDetailsVM
+        //    {
+        //        Id = blogPost.Id,
+        //        Title = blogPost.Title,
+        //        Content = blogPost.Content,
+        //        Author = blogPost.Author,
+        //        PublishedDate = blogPost.PublishedDate,
+        //        Likes = blogPost.Likes,
+        //        IsPublic = blogPost.IsPublic,
+        //        ProfileId = profile?.Id,
+        //        ProfileImageUrl = profileImageUrl,
+        //        LikedByDisplay = ResolveLikedByDisplay(blogPost.LikedBy)
+        //    };
 
-            return View(postVM);
-        }
+        //    return View(postVM);
+        //}
 
         // GET: User/BlogPost/Create
         public IActionResult Create()
@@ -175,33 +178,27 @@ namespace Postabl.Areas.User.Controllers
                 return NotFound();
             }
 
-            if (!ModelState.IsValid)
+            var blogPost = _unitOfWork.BlogPost.Get(b => b.Id == id);
+
+            if (ModelState.IsValid)
             {
-                var reload = _unitOfWork.BlogPost.Get(b => b.Id == id);
-                return View(reload ?? posted);
+                blogPost.Title = posted.Title;
+                blogPost.Content = posted.Content;
+                blogPost.IsPublic = isPublic;
             }
-
-            var existing = _unitOfWork.BlogPost.Get(b => b.Id == id);
-            if (existing == null) return NotFound();
-
-            // Copy only editable fields
-            existing.Title = posted.Title;
-            existing.Content = posted.Content;
-            existing.IsPublic = isPublic;
 
             try
             {
-                _unitOfWork.BlogPost.Update(existing);
+                _unitOfWork.BlogPost.Update(blogPost);
                 _unitOfWork.Save();
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!BlogPostExists(existing.Id)) return NotFound();
+                if (!BlogPostExists(blogPost.Id)) return NotFound();
                 throw;
             }
 
-            // Redirect to the post details (or Index) to avoid repost
-            return RedirectToAction(nameof(Details), new { id = existing.Id });
+            return RedirectToAction(nameof(ViewPost), new { id = blogPost.Id });
         }
 
         // GET: User/BlogPost/Delete/5
