@@ -152,30 +152,26 @@ namespace Postabl.Areas.User.Controllers
                 return NotFound();
             }
 
-            if (!ModelState.IsValid)
+            var existingProfile = _unitOfWork.Profile.Get(p => p.Id == id);
+
+            if(ModelState.IsValid)
             {
-                return View(profile);
+                // Only update allowed fields from the incoming model
+                existingProfile.Bio = profile.Bio;
+                existingProfile.DisplayName = profile.DisplayName;
+                try
+                {
+                    _unitOfWork.Profile.Update(existingProfile);
+                    _unitOfWork.Save();
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    if (_unitOfWork.Profile.Get(p => p.Id == id) == null) return NotFound();
+                    throw;
+                }
             }
 
-            var existing = _unitOfWork.Profile.Get(p => p.Id == id);
-            if (existing == null) return NotFound();
-
-            // Only update allowed fields from the incoming model
-            existing.Bio = profile.Bio;
-            existing.DisplayName = profile.DisplayName;
-
-            try
-            {
-                _unitOfWork.Profile.Update(existing);
-                _unitOfWork.Save();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (_unitOfWork.Profile.Get(p => p.Id == id) == null) return NotFound();
-                throw;
-            }
-
-            // Redirect to profile view (or Index) to avoid re-post issues
+            // Redirect to profile view to avoid re-post issues
             return RedirectToAction(nameof(Profile));
         }
 
@@ -214,6 +210,11 @@ namespace Postabl.Areas.User.Controllers
                 return NotFound(new { success = false, error = "Profile not found" });
             }
 
+            // Get the old image URL to delete later
+            string oldImageUrl = imageType == ImageType.Profile
+                ? profile.ProfileImageUrl
+                : profile.CoverImageUrl;
+
             // Create uploads directory if it doesn't exist
             var uploadsDir = Path.Combine(_env.WebRootPath, "uploads", "profiles");
             Directory.CreateDirectory(uploadsDir);
@@ -246,7 +247,45 @@ namespace Postabl.Areas.User.Controllers
             _unitOfWork.Profile.Update(profile);
             _unitOfWork.Save();
 
+            // Delete old image file after successfully saving the new one
+            DeleteOldImageFile(oldImageUrl);
+
             return Json(new { success = true, url = imageUrl });
+        }
+
+        private void DeleteOldImageFile(string? imageUrl)
+        {
+            if (string.IsNullOrWhiteSpace(imageUrl))
+            {
+                return; // No old image to delete
+            }
+
+            try
+            {
+                // Remove query string (e.g., "?v=123456") from the URL
+                var urlWithoutQuery = imageUrl.Split('?')[0];
+
+                // Check if it's a local file path (starts with /uploads/)
+                if (urlWithoutQuery.StartsWith("/uploads/", StringComparison.OrdinalIgnoreCase))
+                {
+                    // Convert URL path to physical file path
+                    var relativePath = urlWithoutQuery.TrimStart('/');
+                    var physicalPath = Path.Combine(_env.WebRootPath, relativePath);
+
+                    // Delete the file if it exists
+                    if (System.IO.File.Exists(physicalPath))
+                    {
+                        System.IO.File.Delete(physicalPath);
+                    }
+                }
+                // If it's an external URL (e.g., UI Avatars API), don't try to delete it
+            }
+            catch (Exception ex)
+            {
+                // Log the error but don't fail the upload
+                // In production, you'd want to log this to your logging system
+                Console.WriteLine($"Error deleting old image: {ex.Message}");
+            }
         }
 
         private string ResolveLikedByDisplay(string? likedByJson)

@@ -74,48 +74,9 @@ namespace Postabl.Areas.User.Controllers
                 LikedByDisplay = ResolveLikedByDisplay(blogPost.LikedBy)
             };
 
-            return View(postVM);
+            return View("ViewPost", postVM);
         }
 
-        // GET: User/BlogPost/Details/5
-        //public async Task<IActionResult> Details(int? id)
-        //{
-        //    if (id == null)
-        //    {
-        //        return NotFound();
-        //    }
-
-        //    var blogPost = _unitOfWork.BlogPost.Get(b => b.Id == id);
-        //    if (blogPost == null)
-        //    {
-        //        return NotFound();
-        //    }
-
-        //    var profile = _unitOfWork.Profile.Get(p => p.ApplicationUserId == blogPost.ApplicationUserId);
-
-        //    // Generate avatar URL with initials
-        //    var displayName = profile?.DisplayName ?? profile?.ApplicationUser?.Name ?? blogPost.Author ?? "User";
-        //    var profileImageUrl = string.IsNullOrWhiteSpace(profile?.ProfileImageUrl)
-        //        ? $"https://ui-avatars.com/api/?name={Uri.EscapeDataString(displayName)}&background=random&color=fff&size=128"
-        //        : profile.ProfileImageUrl;
-
-        //    // Map to a view model for reading a post
-        //    var postVM = new PostDetailsVM
-        //    {
-        //        Id = blogPost.Id,
-        //        Title = blogPost.Title,
-        //        Content = blogPost.Content,
-        //        Author = blogPost.Author,
-        //        PublishedDate = blogPost.PublishedDate,
-        //        Likes = blogPost.Likes,
-        //        IsPublic = blogPost.IsPublic,
-        //        ProfileId = profile?.Id,
-        //        ProfileImageUrl = profileImageUrl,
-        //        LikedByDisplay = ResolveLikedByDisplay(blogPost.LikedBy)
-        //    };
-
-        //    return View(postVM);
-        //}
 
         // GET: User/BlogPost/Create
         public IActionResult Create()
@@ -185,17 +146,16 @@ namespace Postabl.Areas.User.Controllers
                 blogPost.Title = posted.Title;
                 blogPost.Content = posted.Content;
                 blogPost.IsPublic = isPublic;
-            }
-
-            try
-            {
-                _unitOfWork.BlogPost.Update(blogPost);
-                _unitOfWork.Save();
-            }
-            catch (DbUpdateConcurrencyException)
-            {
-                if (!BlogPostExists(blogPost.Id)) return NotFound();
-                throw;
+                try
+                {
+                    _unitOfWork.BlogPost.Update(blogPost);
+                    _unitOfWork.Save();
+                }
+                catch (DbUpdateConcurrencyException)
+                {
+                    if (!BlogPostExists(blogPost.Id)) return NotFound();
+                    throw;
+                }
             }
 
             return RedirectToAction(nameof(ViewPost), new { id = blogPost.Id });
